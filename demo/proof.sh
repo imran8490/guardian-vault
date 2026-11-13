@@ -108,7 +108,7 @@ if [ -n "$RX" ]; then
   R_TX=${RX% *}; R_BLK=${RX#* }; R_TS=$(ts "$R_BLK" $L)
   echo "Reactive ActionRequested (Lasna block $R_BLK, t=$R_TS): $R_TX"
 else
-  echo "Reactive ActionRequested (Lasna): none found for this epoch (the reactive contract may have skipped it: hysteresis, cooldown or stale; see its Skipped events)"
+  echo "Reactive ActionRequested (Lasna): none found ${LASNA_NOTE:-for this epoch (the reactive contract may have skipped it: hysteresis, cooldown or stale; see its Skipped events)}"
 fi
 if [ -n "$CB" ]; then
   C_TX=${CB% *}; C_BLK=${CB#* }; C_TS=$(ts "$C_BLK" $B)

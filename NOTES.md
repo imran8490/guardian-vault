@@ -48,10 +48,15 @@ swap -> AI publish : 14 s (includes polling, features, OpenAI call, tx confirmat
 publish -> vault   : 2 s (oracle event -> Lasna -> callback)
 swap -> vault moved: 16 s end to end
 (timestamps are Base block times, 1 s resolution)
-## Proof for epoch 12 (score 10, model gpt-4o-mini-2024-07-18)
-Reason: The market shows a significant price increase with no current drawdown, indicating calm trading conditions. | rule=0 llm=10 final=10
+## Proof for epoch 11 (score 30, model gpt-4o-mini-2024-07-18)
+Reason: The price has increased significantly, but the recent sell pressure and high swap impact indicate elevated risk. | rule=0 llm=30 final=30
 
-Trigger swap (Base block 57334305, t=1794388729): 0x28859e0ad9d359394d7b23c87733a4535a05d63bfe28a0fa27056b974300d05e
-AI publishRisk (Base block 57334433, t=1794388755): 0x19bda654bfef13b7d7539e81b2361edc914c4b7262b448498f7b9afdb812fdf1
-Reactive ActionRequested (Lasna): none found for this epoch (the reactive contract may have skipped it: hysteresis, cooldown or stale; see its Skipped events)
-Vault callback: not found within 760 blocks of the publish (no action was requested for this epoch?)
+Trigger swap (Base block 57334151, t=1794388699): 0x35cf0b9f4a2481ab6558266d3b855d65bc67317b7f671016d72356fa867838b1
+AI publishRisk (Base block 57334295, t=1794388727): 0x58a001cfd8bd3104aea72d1b9fd7d5c3855e4ccb4765f6e6d7a191ffb354ac29
+Reactive ActionRequested (Lasna block 8072460, t=1794388728): 0xe28e90a207b414d05a951d6327081b3b5031661c4bf335a6c82ac2f680ba4ad9
+Vault ReRisked callback (Base block 57334305, t=1794388729): 0x28859e0ad9d359394d7b23c87733a4535a05d63bfe28a0fa27056b974300d05e
+
+swap -> AI publish : 28 s (includes polling, features, OpenAI call, tx confirmation)
+publish -> vault   : 2 s (oracle event -> Lasna -> callback)
+swap -> vault moved: 30 s end to end
+(timestamps are Base block times, 1 s resolution)
