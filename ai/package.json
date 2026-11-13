@@ -1,0 +1,20 @@
+{
+  "name": "guardian-ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Off-chain AI risk service for Guardian Vault: watches MockPool swaps, asks an LLM for a risk verdict, publishes it to RiskOracle",
+  "scripts": {
+    "keygen": "node src/keygen.js",
+    "check": "node src/check-llm.js",
+    "start": "node src/index.js",
+    "dry": "DRY_RUN=1 node src/index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "viem": "^2.21.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

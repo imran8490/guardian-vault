@@ -36,3 +36,22 @@ ReRisked callback (Base, block 57315883): 0xf167e050f3e5cdf16ebca9582c314cc2c8cf
 Result: riskOff=false, vault bought back 44.45 gVOL with 44.06 gUSD
 Publish to callback = 2s
 Honest note: pool was already crashed (price 0.44) when the verdict came, so the vault sold low and bought back after recovery: 100 gVOL -> 44.45 gVOL. The loop works; the demo scenario needs the AI to react earlier (week 3: staged crash).
+## Proof for epoch 6 (score 70, model gpt-4o-mini-2024-07-18)
+Reason: A significant 17.26% drop with ongoing selling pressure and no recovery indicates a dangerous situation for gVOL holders. | rule=60 llm=70 final=70
+
+Trigger swap (Base block 57331588, t=1794388186): 0x99dae5437c721ef0c5b42973783f4b4bec8886e14eec93665f6c2851fdddc503
+AI publishRisk (Base block 57331656, t=1794388200): 0x0233b99e94da631d75d7ba345b50759f6daa05ebb6c7cda2739e0c8bbfae226d
+Reactive ActionRequested (Lasna block 8071957, t=1794388200): 0x4f4b7d23c0bcb4e2b33c3a3e5fec1b4438d966d59c2c3bbbd1b751d756a6a96a
+Vault DeRisked callback (Base block 57331666, t=1794388202): 0x07e97edd6f6c8a79723cd34fa0d78bb5018878214f90a8d716978535014dd520
+
+swap -> AI publish : 14 s (includes polling, features, OpenAI call, tx confirmation)
+publish -> vault   : 2 s (oracle event -> Lasna -> callback)
+swap -> vault moved: 16 s end to end
+(timestamps are Base block times, 1 s resolution)
+## Proof for epoch 12 (score 10, model gpt-4o-mini-2024-07-18)
+Reason: The market shows a significant price increase with no current drawdown, indicating calm trading conditions. | rule=0 llm=10 final=10
+
+Trigger swap (Base block 57334305, t=1794388729): 0x28859e0ad9d359394d7b23c87733a4535a05d63bfe28a0fa27056b974300d05e
+AI publishRisk (Base block 57334433, t=1794388755): 0x19bda654bfef13b7d7539e81b2361edc914c4b7262b448498f7b9afdb812fdf1
+Reactive ActionRequested (Lasna): none found for this epoch (the reactive contract may have skipped it: hysteresis, cooldown or stale; see its Skipped events)
+Vault callback: not found within 760 blocks of the publish (no action was requested for this epoch?)
