@@ -25,6 +25,15 @@ No keeper bot and no multisig sits between the verdict and the vault. Without a 
 
 ![Architecture](docs/architecture.png)
 
+## How this fits the track brief
+
+The Reactive Meets AI brief asks for a neural network in the loop, working alongside Reactive, as part of the running system.
+
+- **On-chain events trigger the model:** the AI service watches the pool's `Swap` events and scores them.
+- **The model decides what the reactive contract does next:** its verdict is the `RiskUpdated` event that `GuardianReactive` acts on.
+- **Part of the running system:** stop the AI service and no verdict arrives, so the vault never moves.
+- The model is OpenAI gpt-4o-mini, constrained by a rule-based guard band. The reactive contract runs on Lasna; pool, oracle and vault are on Base Sepolia.
+
 ## Live deployment
 
 | Contract | Chain | Address |
