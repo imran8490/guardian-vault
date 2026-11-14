@@ -46,13 +46,13 @@ Anyone who parks funds in a volatile asset and cannot watch the market all day: 
 
 | | |
 |---|---|
-| Swap → vault moved (end to end) | **15 s** |
+| Swap → vault moved, de-risk (epoch 27) | **15 s** |
 | of which AI step (poll, features, OpenAI call, tx) | 14 s |
 | of which oracle event → Lasna → vault callback | 1 s |
 | Vault at the crash bottom (pool price 0.51) | 24.25 gUSD vs 15.01 if it had simply held (**+9.24**) |
 | Vault after full recovery | 24.24 vs 29.48 if held (**−5.24**) |
 
-Across runs the AI step took 11–28 s; the chain hop 1–2 s. Latency is dominated by the LLM call, not by Reactive Network.
+Across runs the AI step took 11–47 s (the re-risk in epoch 30 took 49 s end to end, 2 s of it on-chain); the chain hop was 1–2 s. Latency is dominated by the LLM call, not by Reactive Network.
 
 ### Honest limitations
 

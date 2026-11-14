@@ -60,3 +60,27 @@ swap -> AI publish : 28 s (includes polling, features, OpenAI call, tx confirmat
 publish -> vault   : 2 s (oracle event -> Lasna -> callback)
 swap -> vault moved: 30 s end to end
 (timestamps are Base block times, 1 s resolution)
+## Proof for epoch 27 (score 70, model gpt-4o-mini-2024-07-18)
+Reason: A significant 17.32% drop with only one sell and no recovery indicates a dangerous ongoing decline. | rule=61 llm=70 final=70
+
+Trigger swap (Base block 58095687, t=1794541006): 0x2246240782c7c7d9427e47463a50bb3c337bd46989e2f423c790593b037ba513
+AI publishRisk (Base block 58095759, t=1794541020): 0x3f348001d2c857dcbdcaab4c8719aadc86aafd9a554b0c7c06f83d8431235a0e
+Reactive ActionRequested (Lasna block 8215539, t=1794541019): 0x319dcbd82b7b35b87e1357ed26d88c96eaf3c333333acb883d1a5d6bd2c2e044
+Vault DeRisked callback (Base block 58095764, t=1794541021): 0x7202078565aa8e85ebaf4535fc48b490a0d98f7eea17cc1773397b364fc46bd1
+
+swap -> AI publish : 14 s (includes polling, features, OpenAI call, tx confirmation)
+publish -> vault   : 1 s (oracle event -> Lasna -> callback)
+swap -> vault moved: 15 s end to end
+(timestamps are Base block times, 1 s resolution)
+## Proof for epoch 30 (score 30, model gpt-4o-mini-2024-07-18)
+Reason: There is noticeable selling pressure with a high max swap impact, but the current drawdown is small and the market hasn't crashed yet. | rule=2 llm=30 final=30
+
+Trigger swap (Base block 58096887, t=1794541246): 0xd70856a0b80f6264b62e652a88b32b2d937fb69d9a9cc0aa0bb7d419e81ede48
+AI publishRisk (Base block 58097124, t=1794541293): 0x31fdcfe2b1b9fd7a5f8d747d09fd549bd2f9d3bd2145dea8112094a8b19d1b53
+Reactive ActionRequested (Lasna block 8215797, t=1794541293): 0xf1d87dc82c2b187b548799f7b34452ef4fa28961d095e411ef2b46c9afd9f2a5
+Vault ReRisked callback (Base block 58097132, t=1794541295): 0x331e46b3180afef8fa442096a2091357833536cfa2f372498a08dcc85cb66dff
+
+swap -> AI publish : 47 s (includes polling, features, OpenAI call, tx confirmation)
+publish -> vault   : 2 s (oracle event -> Lasna -> callback)
+swap -> vault moved: 49 s end to end
+(timestamps are Base block times, 1 s resolution)
