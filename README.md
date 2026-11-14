@@ -23,6 +23,8 @@ Built solo for the [Reactive Omni Buildathon](https://dorahacks.io) (DoraHacks, 
 
 No keeper bot and no multisig sits between the verdict and the vault. Without a fresh AI verdict nothing downstream moves, so the model is a required part of the running loop.
 
+![Architecture](docs/architecture.png)
+
 ## Live deployment
 
 | Contract | Chain | Address |
@@ -53,6 +55,16 @@ Anyone who parks funds in a volatile asset and cannot watch the market all day: 
 | Vault after full recovery | 24.24 vs 29.48 if held (**−5.24**) |
 
 Across runs the AI step took 11–47 s (the re-risk in epoch 30 took 49 s end to end, 2 s of it on-chain); the chain hop was 1–2 s. Latency is dominated by the LLM call, not by Reactive Network.
+
+### What it looks like
+
+Crash, AI verdicts (70, then 100) and the vault de-risking, left pane is the demo, right pane is the AI service:
+
+![Crash and de-risk](docs/demo-crash-derisk.png)
+
+Recovery, re-risk and the on-chain evidence for one verdict:
+
+![Recovery and evidence](docs/demo-recovery-evidence.png)
 
 ### Honest limitations
 
