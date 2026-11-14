@@ -4,7 +4,7 @@
 
 Built solo for the [Reactive Omni Buildathon](https://dorahacks.io) (DoraHacks, Nov 5 – Dec 5 2026), track **Reactive Meets AI**. Everything runs live on **Base Sepolia** and **Reactive Lasna**. The tokens and the pool are mocks so the scenario is reproducible.
 
-- Demo video (under 3 min): _add link_
+- Demo video (under 3 min): https://youtu.be/2Bu5kZuYuas
 - Evidence (tx hashes and timings for real runs): [`NOTES.md`](NOTES.md) and [`ai/verdicts.jsonl`](ai/verdicts.jsonl)
 
 ## What it does
