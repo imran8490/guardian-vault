@@ -27,3 +27,4 @@
 - Reactive ActionRequested (Reactive Lasna): [0x1a827feff5257b2a104a36159758eca1be1639fcec79aec2e6ea780cf1697c1c](https://lasna.reactscan.net/tx/0x1a827feff5257b2a104a36159758eca1be1639fcec79aec2e6ea780cf1697c1c)
 - Vault callback (Base Sepolia): [0x9301d2d077fbdd55f512409e1e20e02f3f5a4a1e2632bbc26193beafbb5bfead](https://sepolia.basescan.org/tx/0x9301d2d077fbdd55f512409e1e20e02f3f5a4a1e2632bbc26193beafbb5bfead)
 - Swap to vault, end to end: 106 s
+- Note: the AI service had been stopped and was restarted during this failure test, so the 104 s is in the AI step (swap to verdict). The on-chain part, publish to vault, took 2 s. Not representative latency.
