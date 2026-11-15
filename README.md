@@ -7,7 +7,7 @@ Built solo for the [Reactive Omni Buildathon](https://dorahacks.io) (DoraHacks, 
 > **Scope: testnet only, mock assets.** This is not a mainnet DeFi product and makes no claim of real liquidity, real funds or audited code. What is real is the Reactive Network loop, the OpenAI call and the on-chain transactions. See [`docs/SAFETY.md`](docs/SAFETY.md).
 
 - Demo video (under 3 min): https://youtu.be/F_FTwyEWA5Y
-- Evidence (tx hashes and timings for real runs): [`NOTES.md`](NOTES.md) and [`ai/verdicts.jsonl`](ai/verdicts.jsonl)
+- Evidence (full-loop tx hashes with explorer links for epochs 66, 68, 75, 76): [`EVIDENCE.md`](EVIDENCE.md); all proofs and timings: [`NOTES.md`](NOTES.md); every AI verdict: [`ai/verdicts.jsonl`](ai/verdicts.jsonl)
 
 ## What it does
 
@@ -27,6 +27,32 @@ No keeper bot and no multisig sits between the verdict and the vault. Without a 
 
 ![Architecture](docs/architecture.png)
 
+## Workflow
+
+```mermaid
+flowchart LR
+  subgraph OFF["Off-chain"]
+    AI["AI service<br/>features, rule score, guard band +-30"]
+    LLM["OpenAI gpt-4o-mini"]
+  end
+  subgraph BASE["Base Sepolia"]
+    P["MockPool<br/>Swap events"]
+    O["RiskOracle"]
+    V["GuardianVault"]
+  end
+  subgraph LASNA["Reactive Lasna"]
+    R["GuardianReactive<br/>hysteresis 70/30, cooldown, replay guard"]
+  end
+  P -->|"1 swap"| AI
+  AI <-->|"2 verdict"| LLM
+  AI -->|"3 publishRisk(score, reasonHash)"| O
+  O -->|"4 RiskUpdated"| R
+  R -->|"5 callback"| V
+  V -.->|"6 independent check"| O
+```
+
+Every hop is a real transaction on the Base Sepolia / Reactive Lasna testnets (mock tokens). If the AI or OpenAI fails, the service falls back to the rule score; if the AI is down, nothing moves and the user can still `withdraw()`.
+
 ## Live deployment
 
 | Contract | Chain | Address |
@@ -40,23 +66,23 @@ Base contracts on [sepolia.basescan.org](https://sepolia.basescan.org); the Lasn
 
 ## Execution evidence (reactive transactions and the callbacks they trigger)
 
-[`NOTES.md`](NOTES.md) lists, for real runs, the full chain for one verdict: trigger swap → AI `publishRisk` tx (Base Sepolia) → Lasna `ActionRequested` reactive tx → vault `DeRisked` / `ReRisked` callback tx (Base Sepolia), each with its tx hash and the seconds between steps. It also holds the first smoke-test loop (origin → reactive → callback). Every verdict the AI published, with its features, score, reason and tx hash, is in [`ai/verdicts.jsonl`](ai/verdicts.jsonl). You can regenerate any of it with `demo/proof.sh <epoch>`.
+[`NOTES.md`](NOTES.md) lists, for real runs, the full chain for one verdict: trigger swap → AI `publishRisk` tx (Base Sepolia) → Lasna `ActionRequested` reactive tx → vault `DeRisked` / `ReRisked` callback tx (Base Sepolia), each with its tx hash and the seconds between steps. It also holds the first smoke-test loop (origin → reactive → callback). Every verdict the AI published, with its features, score, reason and tx hash, is in [`ai/verdicts.jsonl`](ai/verdicts.jsonl). You can regenerate any of it with `demo/proof.sh <epoch>`. [`EVIDENCE.md`](EVIDENCE.md) is generated from it by `demo/evidence.py` and covers four epochs: de-risk with OpenAI (66), re-risk with OpenAI (68), de-risk with OpenAI failing so the rule-score fallback is used (75), and re-risk after the AI service came back (76; its 106 s includes the AI service restart, the on-chain part took 2 s). Epochs up to 58 in `NOTES.md` ran on the earlier v1 deployment (vault `0x5caC898a90BA6Ea29e2d0fE3CF41e02b1d8265Df`, reactive `0x14d5BCdd6D00398ab5c26a8f88507dB149669992`, no independent vault check). Epochs 66 and later run on the v2 deployment in the table above.
 
 ## Who this is for
 
 Anyone who parks funds in a volatile asset and cannot watch the market all day: a DAO treasury, a vault depositor, a small fund. Today the protection is a keeper bot or a human with a multisig, both of which are slow, trusted and offline when it matters. Here the trigger is a public on-chain verdict, the action is on-chain and rule-bound, and users can always withdraw.
 
-## Results from the recorded run
+## Results from the recorded run (v2 deployment)
 
 | | |
 |---|---|
-| Swap → vault moved, de-risk (epoch 27) | **15 s** |
-| of which AI step (poll, features, OpenAI call, tx) | 14 s |
-| of which oracle event → Lasna → vault callback | 1 s |
-| Vault at the crash bottom (pool price 0.51) | 24.25 gUSD vs 15.01 if it had simply held (**+9.24**) |
-| Vault after full recovery | 24.24 vs 29.48 if held (**−5.24**) |
+| Swap → vault moved, de-risk with OpenAI (epoch 66) | **9 s** (AI step 7 s, oracle event → Lasna → vault callback 2 s) |
+| Swap → vault moved, re-risk with OpenAI (epoch 68) | **8 s** (AI step 6 s, chain hop 2 s) |
+| Swap → vault moved, de-risk with OpenAI failing, rule-score fallback (epoch 75) | **11 s** |
+| Vault at the crash bottom | **+23.85 gUSD** versus simply holding |
+| Vault after full recovery | **−17.66 gUSD** versus simply holding |
 
-Across runs the AI step took 11–47 s (the re-risk in epoch 30 took 49 s end to end, 2 s of it on-chain); the chain hop was 1–2 s. Latency is dominated by the LLM call, not by Reactive Network.
+Latency is dominated by the LLM call, not by Reactive Network (the chain hop is about 2 s). Earlier v1 runs (epochs 27 and 30 in `NOTES.md`) saw an AI step of 11–47 s.
 
 ### What it looks like
 
@@ -71,7 +97,7 @@ Recovery, re-risk and the on-chain evidence for one verdict:
 ### Honest limitations
 
 - **The vault sells after the first drop, not before it.** It limits further loss; it does not predict the crash.
-- **The round trip costs.** After the pool fully recovers the vault is below plain holding (−5.24 gUSD above; −6.66 in an earlier run). De-risking trades upside for protection and is not free. In a crash that keeps going it wins clearly (+9.24 here, +11.23 earlier).
+- **The round trip costs.** After the pool fully recovers the vault is below plain holding (−17.66 gUSD in the v2 run above; −5.24 and −6.66 in earlier v1 runs). De-risking trades upside for protection and is not free. In a crash that keeps going it wins (+23.85 gUSD at the bottom in the v2 run; +9.24 and +11.23 in earlier v1 runs).
 - Mock tokens and a thin mock pool: numbers are illustrative. `demo/status.sh` always prints the real difference versus holding.
 - LLM output is not deterministic. The guard band and rule score keep the outcome in a sane range, and `ai/verdicts.jsonl` records what the model actually said (it sometimes stays at "danger" after recovery; the guard band corrects it).
 
