@@ -38,7 +38,7 @@ export { parseVerdict };
 export async function askLLM(features, baseline, cfg, fetchImpl = fetch) {
   if (cfg.provider === "mock") {
     // Offline tests only: never used unless LLM_PROVIDER=mock is set explicitly.
-    return { score: baseline, reason: "mock provider (offline test)", model: "mock" };
+    return { score: baseline, reason: "mock provider (offline test)", model: "mock", trace: null };
   }
 
   const body = {
@@ -51,8 +51,13 @@ export async function askLLM(features, baseline, cfg, fetchImpl = fetch) {
     ],
   };
 
+  // What we show in the demo and keep in the audit log: the request exactly as sent (minus the
+  // API key, which only ever travels in the Authorization header) and the model's raw answer.
+  const traceRequest = { url: `${cfg.openaiBase}/chat/completions`, body };
+
   let lastErr;
   for (let attempt = 1; attempt <= 2; attempt++) {
+    const t0 = Date.now();
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), cfg.llmTimeoutMs);
     try {
@@ -72,7 +77,17 @@ export async function askLLM(features, baseline, cfg, fetchImpl = fetch) {
       const data = await res.json();
       const text = data?.choices?.[0]?.message?.content;
       if (!text) throw new Error("OpenAI returned no content");
-      return { ...parseVerdict(text), model: data.model || cfg.openaiModel };
+      const verdict = parseVerdict(text);
+      return {
+        ...verdict,
+        model: data.model || cfg.openaiModel,
+        trace: {
+          request: traceRequest,
+          response: { id: data.id ?? null, model: data.model ?? null, content: text, usage: data.usage ?? null },
+          latencyMs: Date.now() - t0,
+          attempt,
+        },
+      };
     } catch (e) {
       lastErr = e;
     } finally {

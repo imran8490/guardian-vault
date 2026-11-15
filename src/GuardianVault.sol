@@ -6,6 +6,7 @@ import { AbstractCallback } from "@reactive/src/base/AbstractCallback.sol";
 
 import { MockToken } from "./MockToken.sol";
 import { MockPool } from "./MockPool.sol";
+import { RiskOracle } from "./RiskOracle.sol";
 
 /// @title GuardianVault
 /// @notice Holds a volatile asset (VOL) for depositors. When the AI-driven reactive contract
@@ -20,11 +21,22 @@ import { MockPool } from "./MockPool.sol";
 ///  3. Every trade has a slippage guard against the pool's spot price, and a replayed or stale
 ///     callback (epoch not newer than the last one acted on) is ignored.
 ///  4. Deposits are paused while risk-off, so nobody enters at a stale valuation.
+///  5. Independent verdict check: the vault does not take the Reactive contract's word for it. Before
+///     it trades it reads the RiskOracle ITSELF and refuses (CallbackRejected, no trade) unless the
+///     oracle's latest verdict is fresh and really justifies the move (score >= HIGH to de-risk,
+///     <= LOW to re-risk). A buggy or compromised reactive layer cannot move funds on its own, and a
+///     verdict that has since been superseded by a calmer one cannot sell the vault.
 contract GuardianVault is AbstractCallback {
     MockToken public immutable VOL;
     MockToken public immutable STABLE;
     MockPool public immutable POOL;
+    RiskOracle public immutable ORACLE;
     address public immutable OWNER;
+
+    /// @dev Mirror GuardianReactive's thresholds; the vault re-checks them against the oracle.
+    uint8 public immutable HIGH_THRESHOLD;
+    uint8 public immutable LOW_THRESHOLD;
+    uint256 public immutable MAX_VERDICT_AGE;
 
     uint256 public constant MAX_SLIPPAGE_CAP_BPS = 5_000;
     uint256 public maxSlippageBps = 1_000; // 10% default, generous for a thin demo pool
@@ -41,6 +53,9 @@ contract GuardianVault is AbstractCallback {
     event ReRisked(uint256 indexed epoch, uint256 score, uint256 stableSpent, uint256 volReceived);
     /// @dev reason: 1 = stale epoch, 2 = already in requested state
     event CallbackIgnored(uint256 indexed epoch, uint8 reason);
+    /// @dev reason: 1 = oracle's latest score does not justify this action, 2 = oracle's latest
+    ///      verdict is older than MAX_VERDICT_AGE, 3 = callback epoch is ahead of the oracle's epoch
+    event CallbackRejected(uint256 indexed epoch, uint8 reason, uint8 oracleScore);
     event MaxSlippageChanged(uint256 bps);
 
     error NotOwner();
@@ -48,18 +63,30 @@ contract GuardianVault is AbstractCallback {
     error DepositsPausedWhileRiskOff();
     error InsufficientShares(uint256 have, uint256 want);
     error SlippageTooHigh(uint256 bps);
+    error BadConfig();
 
     constructor(
         IPayable callbackProxy_,
         address reactiveContract_,
         MockToken vol_,
         MockToken stable_,
-        MockPool pool_
+        MockPool pool_,
+        RiskOracle oracle_,
+        uint8 high_,
+        uint8 low_,
+        uint256 maxVerdictAge_
     ) payable AbstractCallback(callbackProxy_, reactiveContract_) {
+        if (low_ >= high_ || high_ > 100 || maxVerdictAge_ == 0 || address(oracle_) == address(0)) {
+            revert BadConfig();
+        }
         OWNER = msg.sender;
         VOL = vol_;
         STABLE = stable_;
         POOL = pool_;
+        ORACLE = oracle_;
+        HIGH_THRESHOLD = high_;
+        LOW_THRESHOLD = low_;
+        MAX_VERDICT_AGE = maxVerdictAge_;
     }
 
     // ------------------------------------------------------------------ users
@@ -115,6 +142,7 @@ contract GuardianVault is AbstractCallback {
             emit CallbackIgnored(epoch, 2);
             return;
         }
+        if (!_verdictJustifies(epoch, true)) return;
 
         lastActedEpoch = epoch;
         riskOff = true;
@@ -143,6 +171,7 @@ contract GuardianVault is AbstractCallback {
             emit CallbackIgnored(epoch, 2);
             return;
         }
+        if (!_verdictJustifies(epoch, false)) return;
 
         lastActedEpoch = epoch;
         riskOff = false;
@@ -156,6 +185,25 @@ contract GuardianVault is AbstractCallback {
             received = POOL.swap(false, amount, minOut, address(this));
         }
         emit ReRisked(epoch, score, amount, received);
+    }
+
+    /// @dev Reads the oracle directly (not the callback's arguments) and emits CallbackRejected
+    ///      instead of reverting, so the refusal is a visible, successful transaction on-chain.
+    function _verdictJustifies(uint256 epoch, bool toRiskOff) internal returns (bool) {
+        uint8 score = ORACLE.latestScore();
+        uint8 reason;
+        if (epoch > ORACLE.epoch()) {
+            reason = 3;
+        } else if (block.timestamp > ORACLE.latestTimestamp() + MAX_VERDICT_AGE) {
+            reason = 2;
+        } else if (toRiskOff ? score < HIGH_THRESHOLD : score > LOW_THRESHOLD) {
+            reason = 1;
+        }
+        if (reason != 0) {
+            emit CallbackRejected(epoch, reason, score);
+            return false;
+        }
+        return true;
     }
 
     // ------------------------------------------------------------------ admin

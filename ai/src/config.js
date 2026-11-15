@@ -56,6 +56,7 @@ export function getConfig(env = process.env) {
     openaiModel: env.OPENAI_MODEL || "gpt-4o-mini",
     openaiBase: env.OPENAI_BASE_URL || "https://api.openai.com/v1",
     llmTimeoutMs: num(env.LLM_TIMEOUT_MS, 15000),
+    showLlm: env.SHOW_LLM !== "0", // print each OpenAI request/response (demo); SHOW_LLM=0 to silence
 
     windowSec: num(env.WINDOW_SEC, 300),
     pollMs: num(env.POLL_MS, 3000),

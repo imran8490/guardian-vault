@@ -81,7 +81,9 @@ contract DeployGuardianReactive is GuardianScript {
 }
 
 /// 3. forge script script/Guardian.s.sol:DeployVault --rpc-url $BASE_SEPOLIA_RPC --account $ACCOUNT --broadcast
-/// Needs G_REACTIVE_ADDRESS, VOL_ADDRESS, STABLE_ADDRESS, POOL_ADDRESS.
+/// Needs G_REACTIVE_ADDRESS, VOL_ADDRESS, STABLE_ADDRESS, POOL_ADDRESS, ORACLE_ADDRESS.
+/// Optional (keep equal to the reactive contract's): HIGH_THRESHOLD (70), LOW_THRESHOLD (30),
+/// MAX_AGE_SECONDS (600). The vault re-checks every callback against the oracle with these.
 /// The vault pays for its own callbacks in ETH, so it is funded at deploy (default 0.01 ETH).
 contract DeployVault is GuardianScript {
     address constant BASE_SEPOLIA_PROXY = 0x476F44b11F5C942c58f4c8E3d0300E5710743585;
@@ -91,12 +93,24 @@ contract DeployVault is GuardianScript {
         address vol = vm.envAddress("VOL_ADDRESS");
         address stable = vm.envAddress("STABLE_ADDRESS");
         address pool = vm.envAddress("POOL_ADDRESS");
+        address oracle = vm.envAddress("ORACLE_ADDRESS");
+        uint8 high = uint8(vm.envOr("HIGH_THRESHOLD", uint256(70)));
+        uint8 low = uint8(vm.envOr("LOW_THRESHOLD", uint256(30)));
+        uint256 maxAge = vm.envOr("MAX_AGE_SECONDS", uint256(600));
         address proxy = vm.envOr("CALLBACK_PROXY", BASE_SEPOLIA_PROXY);
         uint256 fund = vm.envOr("VAULT_FUND_WEI", uint256(0.01 ether));
 
         vm.startBroadcast();
         GuardianVault v = new GuardianVault{ value: fund }(
-            IPayable(payable(proxy)), reactive, MockToken(vol), MockToken(stable), MockPool(pool)
+            IPayable(payable(proxy)),
+            reactive,
+            MockToken(vol),
+            MockToken(stable),
+            MockPool(pool),
+            RiskOracle(oracle),
+            high,
+            low,
+            maxAge
         );
         vm.stopBroadcast();
 
@@ -192,5 +206,23 @@ contract RecoverPool is GuardianScript {
         vm.stopBroadcast();
 
         console.log("price after (1e18 = 1.0):", pool.priceE18());
+    }
+}
+
+/// Optional live demo of the vault's independent check (a race, so it can need a retry): publishes a
+/// DANGER verdict and, right behind it, a CALM one. Reactive reacts to the first and requests a de-risk
+/// callback; by the time it lands the oracle's latest verdict is calm, so the vault refuses and emits
+/// CallbackRejected(epoch, 1, calmScore) instead of selling. If the callback wins the race the vault
+/// simply de-risks (a correct outcome); run RecoverPool/reset and try again.
+///   forge script script/Guardian.s.sol:PublishSupersede --rpc-url $BASE_SEPOLIA_RPC --account $ACCOUNT --broadcast
+contract PublishSupersede is GuardianScript {
+    function run() external {
+        RiskOracle oracle = RiskOracle(vm.envAddress("ORACLE_ADDRESS"));
+        vm.startBroadcast();
+        uint256 e1 = oracle.publishRisk(90, keccak256("demo: danger verdict (will be superseded)"));
+        uint256 e2 = oracle.publishRisk(10, keccak256("demo: calm verdict lands right behind it"));
+        vm.stopBroadcast();
+        console.log("danger epoch", e1);
+        console.log("calm epoch", e2);
     }
 }

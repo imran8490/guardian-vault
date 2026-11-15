@@ -7,9 +7,9 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 
 import { AI_DIR, loadEnvFile, getConfig } from "./config.js";
-import { computeFeatures, baselineScore, applyGuard } from "./features.js";
+import { computeFeatures, baselineScore } from "./features.js";
 import { shouldPublish } from "./policy.js";
-import { askLLM } from "./llm.js";
+import { scoreVerdict, formatTrace } from "./scoring.js";
 
 loadEnvFile(path.join(AI_DIR, ".env"));
 loadEnvFile(path.join(AI_DIR, "..", ".env")); // reuse POOL/ORACLE/VAULT addresses from the main project .env
@@ -93,23 +93,10 @@ async function evaluate() {
   const f = computeFeatures(samples, now, cfg.windowSec);
   const base = baselineScore(f);
 
-  let llm = null;
-  let final = base;
-  let reason = "calm: no swaps in window";
-  let fallback = false;
-
-  if (f.swapCount > 0 || base >= 20) {
-    try {
-      llm = await askLLM(f, base, cfg);
-      final = applyGuard(llm.score, base, cfg.guardBand);
-      reason = llm.reason;
-    } catch (e) {
-      fallback = true;
-      final = base;
-      reason = `fallback to rule score (LLM unavailable: ${String(e.message).slice(0, 80)})`;
-      log("LLM error:", e.message);
-    }
-  }
+  const { llm, final, reason, fallback, trace, guarded, error } = await scoreVerdict(f, base, cfg);
+  if (error) log("LLM error:", error);
+  if (trace && cfg.showLlm) console.log(formatTrace(trace));
+  if (guarded) log(`  guard band: model said ${llm.score}, rule score ${base} -> clamped to ${final}`);
 
   const riskOff = await readRiskOff();
   const decision = shouldPublish({
@@ -130,7 +117,8 @@ async function evaluate() {
   const entry = {
     time: new Date().toISOString(), features: f, ruleScore: base,
     llm: llm ? { score: llm.score, model: llm.model, reason: llm.reason } : null,
-    fallback, finalScore: final, reasonText, reasonHash, why: decision.why, vaultRiskOff: riskOff,
+    openai: trace, // full request/response exchange (no API key), so every verdict can be audited
+    guarded, fallback, finalScore: final, reasonText, reasonHash, why: decision.why, vaultRiskOff: riskOff,
   };
 
   if (cfg.dryRun) {

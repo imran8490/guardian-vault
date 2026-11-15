@@ -4,7 +4,9 @@
 
 Built solo for the [Reactive Omni Buildathon](https://dorahacks.io) (DoraHacks, Nov 5 – Dec 5 2026), track **Reactive Meets AI**. Everything runs live on **Base Sepolia** and **Reactive Lasna**. The tokens and the pool are mocks so the scenario is reproducible.
 
-- Demo video (under 3 min): https://youtu.be/2Bu5kZuYuas
+> **Scope: testnet only, mock assets.** This is not a mainnet DeFi product and makes no claim of real liquidity, real funds or audited code. What is real is the Reactive Network loop, the OpenAI call and the on-chain transactions. See [`docs/SAFETY.md`](docs/SAFETY.md).
+
+- Demo video (under 3 min): https://youtu.be/F_FTwyEWA5Y
 - Evidence (tx hashes and timings for real runs): [`NOTES.md`](NOTES.md) and [`ai/verdicts.jsonl`](ai/verdicts.jsonl)
 
 ## What it does
@@ -19,20 +21,11 @@ Built solo for the [Reactive Omni Buildathon](https://dorahacks.io) (DoraHacks, 
 1. Swaps hit a mock x\*y=k pool. Each `Swap` event carries the post-swap price.
 2. The **AI service** (Node, `ai/`) turns the recent swaps into computed features, asks OpenAI for a `{score, reason}` verdict, clamps it to the deterministic rule score ± 30, and calls `RiskOracle.publishRisk(score, keccak(reason))`.
 3. **GuardianReactive** (on Lasna) subscribes to `RiskUpdated`. It decides, using hysteresis, a cooldown, staleness and replay checks, whether the vault should move, and requests a callback.
-4. **GuardianVault** swaps its gVOL (volatile) into gUSD (stable) on `deRisk`, and back on `reRisk`. Only the callback proxy acting for our Reactive contract can trigger either.
+4. **GuardianVault** swaps its gVOL (volatile) into gUSD (stable) on `deRisk`, and back on `reRisk`. Only the callback proxy acting for our Reactive contract can trigger either, and the vault does not take the callback on trust: it re-reads `RiskOracle` itself and refuses (`CallbackRejected`) unless the oracle's latest verdict is fresh and really justifies the move.
 
 No keeper bot and no multisig sits between the verdict and the vault. Without a fresh AI verdict nothing downstream moves, so the model is a required part of the running loop.
 
 ![Architecture](docs/architecture.png)
-
-## How this fits the track brief
-
-The Reactive Meets AI brief asks for a neural network in the loop, working alongside Reactive, as part of the running system.
-
-- **On-chain events trigger the model:** the AI service watches the pool's `Swap` events and scores them.
-- **The model decides what the reactive contract does next:** its verdict is the `RiskUpdated` event that `GuardianReactive` acts on.
-- **Part of the running system:** stop the AI service and no verdict arrives, so the vault never moves.
-- The model is OpenAI gpt-4o-mini, constrained by a rule-based guard band. The reactive contract runs on Lasna; pool, oracle and vault are on Base Sepolia.
 
 ## Live deployment
 
@@ -40,8 +33,8 @@ The Reactive Meets AI brief asks for a neural network in the loop, working along
 |---|---|---|
 | RiskOracle | Base Sepolia (84532) | `0x10E4eF88f1A4f82823198868d99756e0F118FB37` |
 | MockPool | Base Sepolia (84532) | `0x9992fB4FF288FA112d1bA4e4d70c67406b58390E` |
-| GuardianVault | Base Sepolia (84532) | `0x5caC898a90BA6Ea29e2d0fE3CF41e02b1d8265Df` |
-| GuardianReactive | Reactive Lasna (5318007) | `0x14d5BCdd6D00398ab5c26a8f88507dB149669992` |
+| GuardianVault | Base Sepolia (84532) | `0x5E114CE312DACd8e2892967B05891E689CdB89d2` |
+| GuardianReactive | Reactive Lasna (5318007) | `0x9992fB4FF288FA112d1bA4e4d70c67406b58390E` |
 
 Base contracts on [sepolia.basescan.org](https://sepolia.basescan.org); the Lasna contract on [lasna.reactscan.net](https://lasna.reactscan.net). AI signer wallet (the only address allowed to publish risk): `0x099538191912fA7Ee4B8574a6Be114276A9bCf9f`.
 
@@ -98,6 +91,9 @@ Recovery, re-risk and the on-chain evidence for one verdict:
 4. Stale or duplicate callbacks are ignored (`CallbackIgnored`), not executed.
 5. Deposits are paused while risk-off.
 6. Only the AI signer can publish risk; the owner can rotate the signer.
+7. **Independent verdict check:** before trading, the vault reads the oracle directly. De-risk needs latest score ≥ 70, re-risk ≤ 30, and the verdict must be no older than `MAX_AGE`. Otherwise it emits `CallbackRejected(epoch, reason, oracleScore)` and does not trade, so a wrong, superseded or forged verdict cannot move funds.
+
+The full threat table (wrong AI verdict, OpenAI API failure, stale verdict, replay, unauthorized signer) with the test behind each row and real test output is in [`docs/SAFETY.md`](docs/SAFETY.md). Reproduce it with `demo/safety-proof.sh`.
 
 ## The AI service (`ai/`)
 
@@ -109,7 +105,7 @@ Swap events ─► features (price path, drawdown, sell streak, impact, speed)
 
 - **Features, not raw logs.** The LLM receives computed numbers and must answer strict JSON `{score, reason}`. Market data is treated as untrusted input in the prompt.
 - **Guard band.** Final score = LLM score clamped to rule score ± 30. The model cannot invent a crash in a calm market or argue the vault out of reacting to an obvious one. If OpenAI is unreachable the rule score is used and the reason says "fallback".
-- **Auditable.** Every published verdict is appended to `ai/verdicts.jsonl` (features, rule score, LLM score/model/reason, tx hash, epoch). The on-chain `reasonHash` is `keccak256(reasonText)`, so anyone can check a logged reason against the chain.
+- **Auditable.** Every published verdict is appended to `ai/verdicts.jsonl` (features, rule score, LLM score/model/reason, the full OpenAI request and response, tx hash, epoch). The service also prints each OpenAI exchange live (`SHOW_LLM=0` to silence). The on-chain `reasonHash` is `keccak256(reasonText)`, so anyone can check a logged reason against the chain.
 - **Separate wallet.** The service signs with its own key (`npm run keygen`, never printed). Only that address is the oracle's signer.
 - **Publish policy** (`src/policy.js`): publish when action is needed, when the score moves ≥ 15, as a heartbeat (keeps verdicts inside `MAX_AGE`), and re-publish while the vault has not yet moved. Rate limit 20 s.
 
@@ -120,8 +116,8 @@ Requirements: Foundry, Node 20+, a throwaway wallet with Base Sepolia ETH and lR
 ```bash
 git clone --recurse-submodules <this repo> && cd guardian-vault
 forge build
-forge test                     # 52 tests
-(cd ai && npm install && npm test)   # 23 tests
+forge test                     # 63 tests
+(cd ai && npm install && npm test)   # 33 tests
 cp .env.example .env           # fill in as you deploy, then: source .env
 cast wallet import testdeployer --interactive   # keys live in a Foundry keystore, never in .env
 ```
@@ -138,6 +134,8 @@ forge script script/Guardian.s.sol:DeployVault           --rpc-url $BASE_SEPOLIA
 forge script script/Guardian.s.sol:LinkVault             --rpc-url $LASNA_RPC        --account $ACCOUNT --broadcast  # one-time link
 forge script script/Guardian.s.sol:SeedVault             --rpc-url $BASE_SEPOLIA_RPC --account $ACCOUNT --broadcast  # deposit 100 gVOL
 ```
+
+`DeployVault` also needs `ORACLE_ADDRESS` (the vault checks it) and, optionally, the same `HIGH_THRESHOLD`/`LOW_THRESHOLD`/`MAX_AGE_SECONDS` as the reactive contract.
 
 Paste each printed address into `.env` and `source .env` again between steps.
 
@@ -179,7 +177,7 @@ rm ~/.guardian-pw
 | `src/GuardianVault.sol` | shares-based vault; `deRisk` / `reRisk` via callback (`AbstractCallback`) |
 | `src/Hello*.sol` | first smoke test of the Reactive loop (origin → reactive → callback) |
 | `script/` | deploy, link, seed, crash/recover and publish scripts |
-| `test/` | 10 hello-loop tests + 42 Guardian tests (mock system contract at `0x8888…8888`) |
+| `test/` | 10 hello-loop tests + 53 Guardian tests (mock system contract at `0x8888…8888`) |
 | `ai/` | the AI risk service, its tests and `verdicts.jsonl` |
 | `demo/` | one-command demo, status, reset and evidence scripts |
 

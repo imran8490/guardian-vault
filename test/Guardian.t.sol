@@ -89,7 +89,9 @@ abstract contract GuardianBase is Test {
 
         oracle = new RiskOracle(ai);
         reactive = new GuardianReactive(BASE, address(oracle), BASE, HIGH, LOW, COOLDOWN, MAX_AGE);
-        vault = new GuardianVault(IPayable(payable(PROXY)), address(reactive), vol, stable, pool);
+        vault = new GuardianVault(
+            IPayable(payable(PROXY)), address(reactive), vol, stable, pool, oracle, HIGH, LOW, MAX_AGE
+        );
         reactive.setVault(address(vault));
 
         _deposit(alice, 100e18);
@@ -132,6 +134,12 @@ abstract contract GuardianBase is Test {
         IReactive.LogRecord memory l = _log(epoch, score, publishedAt);
         vm.prank(SYSTEM_ADDR);
         reactive.react(l);
+    }
+
+    /// @dev The AI signer publishes a verdict on the oracle; returns its epoch.
+    function _verdict(uint8 score) internal returns (uint256 epoch) {
+        vm.prank(ai);
+        epoch = oracle.publishRisk(score, keccak256(abi.encode("test verdict", score)));
     }
 
     function _callbackAsProxy(uint256 epoch, bool deRisk_, uint256 score) internal {
@@ -320,6 +328,7 @@ contract GuardianVaultTest is GuardianBase {
     // ---- behaviour
 
     function test_deRiskSellsAllVolForStable() public {
+        _verdict(90);
         _callbackAsProxy(1, true, 90);
         (uint256 v, uint256 s) = vault.holdings();
         assertEq(v, 0);
@@ -329,6 +338,7 @@ contract GuardianVaultTest is GuardianBase {
     }
 
     function test_withdrawWhileRiskOffPaysStable() public {
+        _verdict(90);
         _callbackAsProxy(1, true, 90);
         vm.prank(alice);
         (uint256 v, uint256 s) = vault.withdraw(100e18);
@@ -338,6 +348,7 @@ contract GuardianVaultTest is GuardianBase {
     }
 
     function test_depositsPausedWhileRiskOff() public {
+        _verdict(90);
         _callbackAsProxy(1, true, 90);
         vol.mint(bob, 10e18);
         vm.startPrank(bob);
@@ -348,7 +359,9 @@ contract GuardianVaultTest is GuardianBase {
     }
 
     function test_reRiskBuysBack() public {
+        _verdict(90);
         _callbackAsProxy(1, true, 90);
+        _verdict(10);
         _callbackAsProxy(2, false, 10);
         (uint256 v, uint256 s) = vault.holdings();
         assertGt(v, 90e18);
@@ -357,7 +370,9 @@ contract GuardianVaultTest is GuardianBase {
     }
 
     function test_duplicateAndStaleCallbacksAreIgnored() public {
+        _verdict(90);
         _callbackAsProxy(1, true, 90);
+        _verdict(95);
         (uint256 v1, uint256 s1) = vault.holdings();
 
         // newer epoch but already risk-off -> reason 2
@@ -384,6 +399,7 @@ contract GuardianVaultTest is GuardianBase {
     }
 
     function test_slippageGuardBlocksBadTrade() public {
+        _verdict(90);
         _deposit(bob, 300e18); // vault now 400 VOL against a 1000/1000 pool: ~29% impact
         uint256 expectedOut = pool.getAmountOut(true, 400e18);
         uint256 minOut = (400e18 * (10_000 - vault.maxSlippageBps())) / 10_000;
@@ -407,10 +423,125 @@ contract GuardianVaultTest is GuardianBase {
         vault.setMaxSlippageBps(5_001);
 
         vault.setMaxSlippageBps(4_000);
+        _verdict(90);
         _deposit(bob, 300e18);
         vm.prank(PROXY);
         vault.deRisk(address(reactive), 1, 90); // now passes
         assertTrue(vault.riskOff());
+    }
+
+    // ---- independent verdict check: the vault reads the oracle itself (wrong / unjustified AI verdicts)
+
+    function test_wrongVerdict_calmOracleBlocksDeRisk() public {
+        // AI says calm (20), but a (buggy/compromised) reactive layer asks to de-risk with score 95
+        uint256 e = _verdict(20);
+        vm.expectEmit(true, false, false, true);
+        emit GuardianVault.CallbackRejected(e, 1, 20);
+        _callbackAsProxy(e, true, 95);
+        assertFalse(vault.riskOff());
+        (uint256 v,) = vault.holdings();
+        assertEq(v, 100e18);
+        assertEq(vault.lastActedEpoch(), 0);
+    }
+
+    function test_wrongVerdict_middleBandBlocksBothDirections() public {
+        uint256 e = _verdict(50); // between LOW and HIGH: justifies neither move
+        vm.expectEmit(true, false, false, true);
+        emit GuardianVault.CallbackRejected(e, 1, 50);
+        _callbackAsProxy(e, true, 90);
+        assertFalse(vault.riskOff());
+
+        _verdict(90);
+        _callbackAsProxy(2, true, 90);
+        assertTrue(vault.riskOff());
+
+        uint256 e3 = _verdict(50);
+        vm.expectEmit(true, false, false, true);
+        emit GuardianVault.CallbackRejected(e3, 1, 50);
+        _callbackAsProxy(e3, false, 10);
+        assertTrue(vault.riskOff()); // stayed in stable
+    }
+
+    function test_wrongVerdict_thresholdsAreInclusive() public {
+        uint256 e = _verdict(HIGH);
+        _callbackAsProxy(e, true, HIGH);
+        assertTrue(vault.riskOff());
+        uint256 e2 = _verdict(LOW);
+        _callbackAsProxy(e2, false, LOW);
+        assertFalse(vault.riskOff());
+    }
+
+    function test_wrongVerdict_highOracleBlocksReRisk() public {
+        uint256 e1 = _verdict(90);
+        _callbackAsProxy(e1, true, 90);
+        uint256 e2 = _verdict(85); // still dangerous
+        vm.expectEmit(true, false, false, true);
+        emit GuardianVault.CallbackRejected(e2, 1, 85);
+        _callbackAsProxy(e2, false, 5); // forged "all clear"
+        assertTrue(vault.riskOff());
+        assertEq(vault.lastActedEpoch(), e1);
+    }
+
+    function test_supersededVerdict_cannotSellVault() public {
+        uint256 e1 = _verdict(90); // danger...
+        _verdict(10); // ...but a calmer verdict landed before the callback arrived
+        vm.expectEmit(true, false, false, true);
+        emit GuardianVault.CallbackRejected(e1, 1, 10);
+        _callbackAsProxy(e1, true, 90);
+        assertFalse(vault.riskOff());
+    }
+
+    function test_staleOracleVerdict_isRejected() public {
+        uint256 e = _verdict(90);
+        vm.warp(block.timestamp + MAX_AGE + 1);
+        vm.expectEmit(true, false, false, true);
+        emit GuardianVault.CallbackRejected(e, 2, 90);
+        _callbackAsProxy(e, true, 90);
+        assertFalse(vault.riskOff());
+    }
+
+    function test_verdictExactlyMaxAge_stillAccepted() public {
+        uint256 e = _verdict(90);
+        vm.warp(block.timestamp + MAX_AGE);
+        _callbackAsProxy(e, true, 90);
+        assertTrue(vault.riskOff());
+    }
+
+    function test_futureEpoch_isRejected() public {
+        _verdict(90); // oracle epoch = 1
+        vm.expectEmit(true, false, false, true);
+        emit GuardianVault.CallbackRejected(7, 3, 90);
+        _callbackAsProxy(7, true, 90);
+        assertFalse(vault.riskOff());
+    }
+
+    function test_noVerdictEverPublished_rejects() public {
+        // oracle epoch 0, score 0: nothing justifies selling
+        vm.expectEmit(true, false, false, true);
+        emit GuardianVault.CallbackRejected(1, 3, 0);
+        _callbackAsProxy(1, true, 95);
+        assertFalse(vault.riskOff());
+    }
+
+    function test_rejectedCallbackDoesNotConsumeEpoch() public {
+        uint256 e1 = _verdict(20);
+        _callbackAsProxy(e1, true, 95); // rejected
+        uint256 e2 = _verdict(88);
+        _callbackAsProxy(e2, true, 88); // later honest verdict still works
+        assertTrue(vault.riskOff());
+        assertEq(vault.lastActedEpoch(), e2);
+    }
+
+    function test_vaultBadConfigReverts() public {
+        IPayable p = IPayable(payable(PROXY));
+        vm.expectRevert(GuardianVault.BadConfig.selector);
+        new GuardianVault(p, address(reactive), vol, stable, pool, oracle, 30, 70, MAX_AGE);
+        vm.expectRevert(GuardianVault.BadConfig.selector);
+        new GuardianVault(p, address(reactive), vol, stable, pool, oracle, HIGH, LOW, 0);
+        vm.expectRevert(GuardianVault.BadConfig.selector);
+        new GuardianVault(
+            p, address(reactive), vol, stable, pool, RiskOracle(address(0)), HIGH, LOW, MAX_AGE
+        );
     }
 
     function test_userCanAlwaysWithdraw_evenIfReactiveNeverActs() public {

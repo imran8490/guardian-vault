@@ -46,6 +46,10 @@ except Exception:
     sys.exit(0)
 def num(x):
     return int(x, 16) if isinstance(x, str) and x.startswith("0x") else int(x)
+# a rate-limited / erroring RPC can answer with a JSON error object instead of a list of logs
+if not isinstance(logs, list):
+    sys.exit(0)
+logs = [l for l in logs if isinstance(l, dict)]
 if mode != "last":
     logs = [l for l in logs if len(l.get("topics", [])) > 1 and l["topics"][1].lower() == mode.lower()]
 if not logs:
@@ -91,9 +95,21 @@ lasna_block_at() {
   done
   echo "$est"
 }
-RX=""
-if LB=$(lasna_block_at "$PUBTS" 2>/dev/null); then
-  RX=$(cast logs --address "$G_REACTIVE_ADDRESS" "ActionRequested(uint256 indexed,uint8,bool)" --from-block $((LB - 60)) --to-block $((LB + 180)) --json $L 2>/dev/null | pick "$EPH") || true
+RX=""; LASNA_REACHED=0
+for attempt in 1 2 3; do          # the public Lasna RPC is occasionally flaky right after a burst of txs
+  if LB=$(lasna_block_at "$PUBTS" 2>/dev/null); then
+    LASNA_REACHED=1
+    for WIN in "$((LB - 60)) $((LB + 180))" "$((LB - 300)) $((LB - 61))" "$((LB + 181)) $((LB + 420))"; do
+      set -- $WIN
+      RX=$(cast logs --address "$G_REACTIVE_ADDRESS" "ActionRequested(uint256 indexed,uint8,bool)" --from-block "$1" --to-block "$2" --json $L 2>/dev/null | pick "$EPH") || true
+      [ -n "$RX" ] && break
+    done
+  fi
+  [ -n "$RX" ] && break
+  sleep 3
+done
+if [ -z "$RX" ] && [ "$LASNA_REACHED" = 0 ] && [ -z "${LASNA_NOTE:-}" ]; then
+  LASNA_NOTE="(Lasna RPC did not answer, re-run: demo/proof.sh $EPOCH)"
 fi
 
 echo "## Proof for epoch $EPOCH (score $SCORE, model ${MODEL:-n/a})"

@@ -84,3 +84,77 @@ swap -> AI publish : 47 s (includes polling, features, OpenAI call, tx confirmat
 publish -> vault   : 2 s (oracle event -> Lasna -> callback)
 swap -> vault moved: 49 s end to end
 (timestamps are Base block times, 1 s resolution)
+## Proof for epoch 56 (score 70, model gpt-4o-mini-2024-07-18)
+Reason: A significant 17.23% drop with ongoing selling pressure and no recovery indicates a dangerous situation for gVOL holders. | rule=60 llm=70 final=70
+
+Trigger swap (Base block 59016537, t=1794725176): 0x9aa080869e6a435003829e3615651358588c458f42602dfc81391178fc98ad0b
+AI publishRisk (Base block 59016582, t=1794725185): 0x4ccff2fdc551caea3b7ae940628847d32641e6a43256df99ccebff62f21d3165
+Reactive ActionRequested (Lasna block 8388884, t=1794725184): 0x5dff5006f003e21faaf2e4a9041ddb831353adb6bbdea4df948c81bd32ef301c
+Vault DeRisked callback (Base block 59016593, t=1794725187): 0xc9b653019bbfc27b591dfb3f87b1c5d287cfd5c7c9d02c959be16cc2d06262de
+
+swap -> AI publish : 9 s (includes polling, features, OpenAI call, tx confirmation)
+publish -> vault   : 2 s (oracle event -> Lasna -> callback)
+swap -> vault moved: 11 s end to end
+(timestamps are Base block times, 1 s resolution)
+## Proof for epoch 58 (score 30, model gpt-4o-mini-2024-07-18)
+Reason: A significant sell-driven decline is ongoing with a high sell count and large swap impacts, indicating danger for gVOL holders. | rule=0 llm=80 final=30
+
+Trigger swap (Base block 59017646, t=1794725398): 0xc1d83d80eea1384b368342fdfca0c28340993004b0ae26f669b8497a695a0b16
+AI publishRisk (Base block 59017712, t=1794725411): 0x92c48dff496442333edba1c2c9cd4e39235cc486a7d05e13a69458c8947ac62a
+Reactive ActionRequested (Lasna block 8389095, t=1794725411): 0xc3199d48e309456390cb8a42ba430121ad529826b68c9c1cc3b45014c9b08cf6
+Vault ReRisked callback (Base block 59017724, t=1794725413): 0xd1ed243c2bf71ec6593a0384a99f5fd3b3371584629515c157e4060e1854ea61
+
+swap -> AI publish : 13 s (includes polling, features, OpenAI call, tx confirmation)
+publish -> vault   : 2 s (oracle event -> Lasna -> callback)
+swap -> vault moved: 15 s end to end
+(timestamps are Base block times, 1 s resolution)
+## Proof for epoch 66 (score 70, model gpt-4o-mini-2024-07-18)
+Reason: A significant 17.21% drop with only sells and no buys indicates an ongoing decline, warranting immediate protection of funds. | rule=60 llm=70 final=70
+
+Trigger swap (Base block 59025963, t=1794727061): 0x63c036a9ad6a994062c761b916a889155a726eebcc0a5af9c3fded2b4f4287ba
+AI publishRisk (Base block 59025999, t=1794727068): 0x472c9e75e6300d4252c9abbf4a7fefbba84b1aba8ed0f7e71b199e413dfdfdfc
+Reactive ActionRequested (Lasna block 8390651, t=1794727068): 0x0cc969cf0a0013ee3489112780a8428ed45b3f58459a08f13ce559eeb6dd7dba
+Vault DeRisked callback (Base block 59026009, t=1794727070): 0xbd4ccb79d36488c398ac755deba2818ba23c3a0cb1e2e84cff466656f8e4b9d8
+
+swap -> AI publish : 7 s (includes polling, features, OpenAI call, tx confirmation)
+publish -> vault   : 2 s (oracle event -> Lasna -> callback)
+swap -> vault moved: 9 s end to end
+(timestamps are Base block times, 1 s resolution)
+## Proof for epoch 68 (score 30, model gpt-4o-mini-2024-07-18)
+Reason: There is noticeable selling pressure with a high sell count and significant max drop impact, but the current price has not declined. | rule=0 llm=30 final=30
+
+Trigger swap (Base block 59027131, t=1794727295): 0xde778b6f1f678a5c57b55e70c72e9b9966d252357994c5f9cac620d9a53dc9e7
+AI publishRisk (Base block 59027164, t=1794727301): 0x8b78942ec471dbc6df9d85874ea5263516e7ec31cae7e61ad744cf10f7537626
+Reactive ActionRequested (Lasna block 8390869, t=1794727300): 0xf901fca09b442475b774a0765410ce0c07b0e55796e946839d934d9886149de1
+Vault ReRisked callback (Base block 59027172, t=1794727303): 0x30c79a8a7c83acb080957890f031ba9c9b459630a21d3524d9f6c0e48332122c
+
+swap -> AI publish : 6 s (includes polling, features, OpenAI call, tx confirmation)
+publish -> vault   : 2 s (oracle event -> Lasna -> callback)
+swap -> vault moved: 8 s end to end
+(timestamps are Base block times, 1 s resolution)
+## Proof for epoch 75 (score 100, model None)
+Reason: fallback to rule score (LLM unavailable: OpenAI HTTP 401: {
+  "error": {
+    "message": "Incorrect API key provided: sk-b) | rule=100 llm=n/a final=100
+
+Trigger swap (Base block 59034963, t=1794728861): 0xffbbd60d249c98b20e1969f34a413b2a4c2ea4f90290d20973eedf30ad1a015a
+AI publishRisk (Base block 59035009, t=1794728870): 0x4b9070d828608d395139e42a2021a3aa40bed68c51799713f269e09a1ebf4134
+Reactive ActionRequested (Lasna block 8392343, t=1794728869): 0xfff20587737146b0916ba2fd2188a715349cc4b296ca8f399a29b7d8bcb8e887
+Vault DeRisked callback (Base block 59035017, t=1794728872): 0x797c4065a08af9abee82421fa3e632f7cce96c6c1aa5016a274c7b28aecc19c6
+
+swap -> AI publish : 9 s (includes polling, features, OpenAI call, tx confirmation)
+publish -> vault   : 2 s (oracle event -> Lasna -> callback)
+swap -> vault moved: 11 s end to end
+(timestamps are Base block times, 1 s resolution)
+## Proof for epoch 76 (score 0, model None)
+Reason: calm: no swaps in window | rule=0 llm=n/a final=0
+
+Trigger swap (Base block 59035464, t=1794728961): 0x6ea714f41f71d2f334f154ca9e2b972c3fc642c69d671276e28994cdf2f30665
+AI publishRisk (Base block 59035985, t=1794729065): 0xdfb8148ffb4bf23ba97c4979183bda31b04f98a30295ac030d8a4a0e2afef7b3
+Reactive ActionRequested (Lasna block 8392525, t=1794729065): 0x1a827feff5257b2a104a36159758eca1be1639fcec79aec2e6ea780cf1697c1c
+Vault ReRisked callback (Base block 59035994, t=1794729067): 0x9301d2d077fbdd55f512409e1e20e02f3f5a4a1e2632bbc26193beafbb5bfead
+
+swap -> AI publish : 104 s (includes polling, features, OpenAI call, tx confirmation)
+publish -> vault   : 2 s (oracle event -> Lasna -> callback)
+swap -> vault moved: 106 s end to end
+(timestamps are Base block times, 1 s resolution)
