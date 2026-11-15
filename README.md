@@ -86,7 +86,7 @@ Latency is dominated by the LLM call, not by Reactive Network (the chain hop is 
 
 ### What it looks like
 
-Crash, AI verdicts (70, then 100) and the vault de-risking, left pane is the demo, right pane is the AI service:
+Crash, AI verdicts (70, then 100) and the vault de-risking, left pane is the AI service (OpenAI request and response), right pane is the demo:
 
 ![Crash and de-risk](docs/demo-crash-derisk.png)
 
