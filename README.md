@@ -53,6 +53,21 @@ flowchart LR
 
 Every hop is a real transaction on the Base Sepolia / Reactive Lasna testnets (mock tokens). If the AI or OpenAI fails, the service falls back to the rule score; if the AI is down, nothing moves and the user can still `withdraw()`.
 
+## How this maps to the judging criteria
+
+- **Execution:** the full loop is live and every step has a transaction: trigger swap and AI publish on Base Sepolia, the Reactive transaction on Lasna (`ActionRequested`), and the vault callback on Base Sepolia (`DeRisked` / `ReRisked`). Hashes with explorer links for epochs 66, 68, 75 and 76 are in [`EVIDENCE.md`](EVIDENCE.md); `demo/proof.sh <epoch>` reproduces them.
+- **Integration:** `GuardianReactive` does the real work, not a relay. It owns the decision (hysteresis 70/30, 60 s cooldown, staleness, replay guard), reports skips with reason codes, and is the only party allowed to move the vault. Remove it and the vault never moves. The vault in turn verifies the AI verdict on-chain before trading.
+- **Usefulness:** vault depositors cannot watch markets 24/7, and keeper bots are a trusted single point of failure. Here an AI verdict becomes an on-chain action with no operator, users can always `withdraw()`, and an AI or OpenAI outage fails safe.
+- **Craft:** 63 Foundry tests and 33 AI-service tests, a threat table with a test behind every row ([`docs/SAFETY.md`](docs/SAFETY.md)), a one-command demo, and an audit log of every AI verdict including the full OpenAI request and response (`ai/verdicts.jsonl`, reason hash on-chain).
+
+## Fit with the track brief (Reactive Meets AI)
+
+On-chain events trigger the model: the AI service watches the pool's `Swap` events and scores them. The model then decides what the Reactive contract does next: its verdict is the `RiskUpdated` event that `GuardianReactive` acts on. Stop the AI service and no verdict arrives, so the vault never moves. The model is a hosted LLM (OpenAI gpt-4o-mini, not a network trained by us), constrained by a rule-based guard band.
+
+## What's next
+
+A real pool adapter, multiple signals (oracle price, liquidity depth), and an ensemble or committee of AI signers.
+
 ## Live deployment
 
 | Contract | Chain | Address |
