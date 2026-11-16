@@ -1,4 +1,7 @@
 # Execution proof (Week 1 loop)
+
+> **Which deployment?** Epochs up to 58 below ran on the earlier v1 deployment (vault `0x5caC898a90BA6Ea29e2d0fE3CF41e02b1d8265Df`, reactive `0x14d5BCdd6D00398ab5c26a8f88507dB149669992`, no independent vault check). Epochs 66 and later (including 75 and 76, the OpenAI-failure runs) ran on the v2 deployment listed in the README. Full-loop hashes with explorer links for 66, 68, 75, 76 are in [`EVIDENCE.md`](EVIDENCE.md).
+
 Networks: Base Sepolia (84532), Reactive Lasna (5318007)
 Deployer: 0xcefa779a10FF61f13614ADc86CC94a7Ba75aA08C
 
