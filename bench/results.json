@@ -26,22 +26,6 @@
       "p95": 77,
       "max": 84,
       "mean": 27.7
-    },
-    "pub_to_react": {
-      "n": 9,
-      "min": 0,
-      "median": 0,
-      "p95": 0,
-      "max": 0,
-      "mean": 0.0
-    },
-    "react_to_vault": {
-      "n": 20,
-      "min": 1,
-      "median": 2.0,
-      "p95": 2,
-      "max": 2,
-      "mean": 1.9
     }
   },
   "de_risk": {
@@ -68,22 +52,6 @@
       "p95": 77,
       "max": 77,
       "mean": 16.6
-    },
-    "pub_to_react": {
-      "n": 4,
-      "min": 0,
-      "median": 0.0,
-      "p95": 0,
-      "max": 0,
-      "mean": 0.0
-    },
-    "react_to_vault": {
-      "n": 10,
-      "min": 1,
-      "median": 2.0,
-      "p95": 2,
-      "max": 2,
-      "mean": 1.9
     }
   },
   "re_risk": {
@@ -110,22 +78,6 @@
       "p95": 84,
       "max": 84,
       "mean": 38.8
-    },
-    "pub_to_react": {
-      "n": 5,
-      "min": 0,
-      "median": 0,
-      "p95": 0,
-      "max": 0,
-      "mean": 0.0
-    },
-    "react_to_vault": {
-      "n": 10,
-      "min": 1,
-      "median": 2.0,
-      "p95": 2,
-      "max": 2,
-      "mean": 1.9
     }
   },
   "with_llm_call": {
@@ -152,22 +104,6 @@
       "p95": 84,
       "max": 84,
       "mean": 26.0
-    },
-    "pub_to_react": {
-      "n": 8,
-      "min": 0,
-      "median": 0.0,
-      "p95": 0,
-      "max": 0,
-      "mean": 0.0
-    },
-    "react_to_vault": {
-      "n": 19,
-      "min": 1,
-      "median": 2,
-      "p95": 2,
-      "max": 2,
-      "mean": 1.9
     }
   },
   "samples_detail": [

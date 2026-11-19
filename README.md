@@ -116,6 +116,45 @@ Recovery, re-risk and the on-chain evidence for one verdict:
 - Mock tokens and a thin mock pool: numbers are illustrative. `demo/status.sh` always prints the real difference versus holding.
 - LLM output is not deterministic. The guard band and rule score keep the outcome in a sane range, and `ai/verdicts.jsonl` records what the model actually said (it sometimes stays at "danger" after recovery; the guard band corrects it).
 
+## Latency benchmark (20 samples, v2 deployment)
+
+`demo/bench.sh` repeats the full demo cycle (staged crash, AI verdict, Lasna reaction, vault de-risk, then recovery and re-risk) and `demo/bench_stats.py` aggregates it. All times are on-chain block timestamps (1 s resolution, so each number is ±1 s), and every sample links its transactions in [`bench/RESULTS.md`](bench/RESULTS.md) (raw data in `bench/results.json`).
+
+20 samples from 10 complete cycles (10 de-risk, 10 re-risk); one more run failed and produced no samples (see "What went wrong" below).
+
+| Step | n | min | median | p95 | max |
+|---|---|---|---|---|---|
+| Verdict on-chain → vault moved (oracle event → Lasna → callback) | 20 | 1 s | 1 s | 2 s | 2 s |
+| Swap → AI verdict on-chain (polling, features, OpenAI call, tx) | 20 | 5 s | 10.5 s | 75 s | 83 s |
+| Swap → vault moved, end to end | 20 | 6 s | 12 s | 77 s | 84 s |
+| of which de-risk (crash) | 10 | 6 s | 9 s | 77 s | 77 s |
+| of which re-risk (recovery) | 10 | 8 s | 43.5 s | 84 s | 84 s |
+
+What this says:
+
+- The part Reactive Network owns (oracle event → Lasna reaction → vault callback) took 1 to 2 s in all 20 samples.
+- Nearly all of the end-to-end time is the AI step. De-risk was 6 to 20 s in 9 of 10 cycles (one 77 s outlier, the first run after the problem below was fixed; we did not find its cause).
+- Re-risk was slow in 6 of 10 cycles (42 to 84 s). The AI logs show why we think so: the rule score uses the current drawdown, so it is 0 after a recovery, but the model still sees the crash inside the 300 s window and answers 70. The guard band clamps that to rule score + 30, which is exactly the re-risk threshold (30) when the rule score is 0 and 31 (no re-risk yet) when a 0.22% residual drawdown makes it 1. We have not shown this is the only cause, and we did not change the scoring to make the numbers look better.
+- With n = 20, p95 is essentially the maximum. These are testnet numbers on public RPCs, not a performance claim.
+
+What went wrong during the benchmark (kept in the data, not hidden):
+
+- Run 3 produced no samples. After the first de-risk the Reactive contract stopped processing events (`lastEpoch` stayed at 112 while the AI published up to epoch 123, the vault stayed risk-off). Its reserves at the Reactive system contract had run out. Sending REACT straight to the contract did not help; `depositTo(address)` on the system contract did (debt 0, `lastEpoch` 147, vault risk-on again). We did not read the debt before the deposit, so "reserves ran out" is the explanation that fits, not something we measured.
+- Cost of running it: about 0.07 REACT per cycle (average drop in reserves over 7 cycles, in `bench/RESULTS.md`). `bench.sh` now checks reserves, debt and the vault's ETH before every cycle.
+- One OpenAI call failed with `fetch failed` mid-run; the service fell back to the rule score and published (the designed failure path). That sample is marked as having no LLM call.
+
+## Verify the AI verdicts yourself
+
+`ai/verdicts.jsonl` holds every published verdict with its features, the OpenAI request and response, the guard band decision and the reason text. `npm run replay` re-checks them without trusting the AI service:
+
+```bash
+cd ai
+npm run replay                          # offline: rule score, guard band, reason hash, OpenAI request/response
+npm run replay -- --onchain --last 20   # also compares the last 20 with their RiskUpdated events on Base Sepolia
+```
+
+Last run (see [`docs/REPLAY_RESULT.txt`](docs/REPLAY_RESULT.txt)): 188 verdicts, 188 consistent, 0 inconsistent; the OpenAI exchange was re-checked on 72 of them (17 early entries were logged before the exchange was recorded); 20 of 20 checked verdicts match their on-chain `RiskUpdated` event. This proves the published number follows from the logged inputs. It does not prove the model's judgement is right.
+
 ## What the Reactive contract decides
 
 - **Hysteresis:** de-risk at score ≥ `HIGH` (70), re-risk only at score ≤ `LOW` (30). Scores in between do nothing, so a score wobbling near one line cannot flip-flop the vault.

@@ -88,8 +88,6 @@ METRICS = [
     ("swap_to_pub", "Trigger swap -> AI verdict on-chain (poll + features + LLM + tx)"),
     ("pub_to_vault", "Verdict on-chain -> vault moved (oracle event -> Lasna -> callback)"),
     ("swap_to_vault", "Trigger swap -> vault moved (end to end)"),
-    ("pub_to_react", "Verdict on-chain -> Lasna ActionRequested (secondary, Lasna block time)"),
-    ("react_to_vault", "Lasna ActionRequested -> vault moved (secondary, Lasna block time)"),
 ]
 
 
@@ -160,8 +158,12 @@ def main():
 
     md = []
     md.append("# Latency benchmark (Base Sepolia + Reactive Lasna)\n")
-    md.append(f"{len(valid)} samples from {len(logs)} full demo cycles "
-              f"({len(de)} de-risk, {len(re_)} re-risk). Each cycle is `demo/run-demo.sh`: a staged crash, the AI verdict, "
+    cycles = len({s["run"] for s in valid})
+    failed = len(logs) - cycles
+    md.append(f"{len(valid)} samples from {cycles} complete demo cycles "
+              f"({len(de)} de-risk, {len(re_)} re-risk)"
+              + (f"; {failed} further run(s) failed and produced no samples (see the run logs)" if failed else "")
+              + ". Each cycle is `demo/run-demo.sh`: a staged crash, the AI verdict, "
               "the Lasna reaction and the vault de-risk, then a recovery swap and the re-risk.\n")
     md.append("## How it is measured\n")
     md.append("- All times are on-chain block timestamps (1 s resolution, so each number is +/-1 s), computed by `demo/proof.sh`. "
@@ -170,7 +172,7 @@ def main():
               "The swap-to-verdict step includes the AI service's polling cadence (defaults in `ai/src/config.js`: poll 3 s, evaluate at least every 15 s), "
               "feature computation, the OpenAI call and transaction confirmation, so it is dominated by the AI, not by Reactive Network.\n"
               "- *Verdict on-chain -> vault moved* is the part Reactive Network owns: oracle event, Lasna reaction, callback delivery.\n"
-              "- The Lasna rows are secondary: they mix two chains' block clocks and are shown only where the Lasna reaction was found.\n"
+              "- The Lasna block timestamps are not used: they have the same 1 s resolution but come from a different chain clock, so splitting the Reactive part further would not be meaningful.\n"
               f"- With n = {len(valid)}, p95 is essentially the maximum. These are testnet numbers on public RPCs, not a performance claim.\n")
     md.append("## All samples\n")
     md.append(table(valid) + "\n")

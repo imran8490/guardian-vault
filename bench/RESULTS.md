@@ -1,13 +1,13 @@
 # Latency benchmark (Base Sepolia + Reactive Lasna)
 
-20 samples from 11 full demo cycles (10 de-risk, 10 re-risk). Each cycle is `demo/run-demo.sh`: a staged crash, the AI verdict, the Lasna reaction and the vault de-risk, then a recovery swap and the re-risk.
+20 samples from 10 complete demo cycles (10 de-risk, 10 re-risk); 1 further run(s) failed and produced no samples (see the run logs). Each cycle is `demo/run-demo.sh`: a staged crash, the AI verdict, the Lasna reaction and the vault de-risk, then a recovery swap and the re-risk.
 
 ## How it is measured
 
 - All times are on-chain block timestamps (1 s resolution, so each number is +/-1 s), computed by `demo/proof.sh`. No wall-clock of the measuring machine is involved, and every sample below links its transactions.
 - The *trigger swap* is the last pool swap before the AI verdict, as in `demo/proof.sh`. The swap-to-verdict step includes the AI service's polling cadence (defaults in `ai/src/config.js`: poll 3 s, evaluate at least every 15 s), feature computation, the OpenAI call and transaction confirmation, so it is dominated by the AI, not by Reactive Network.
 - *Verdict on-chain -> vault moved* is the part Reactive Network owns: oracle event, Lasna reaction, callback delivery.
-- The Lasna rows are secondary: they mix two chains' block clocks and are shown only where the Lasna reaction was found.
+- The Lasna block timestamps are not used: they have the same 1 s resolution but come from a different chain clock, so splitting the Reactive part further would not be meaningful.
 - With n = 20, p95 is essentially the maximum. These are testnet numbers on public RPCs, not a performance claim.
 
 ## All samples
@@ -17,8 +17,6 @@
 | Trigger swap -> AI verdict on-chain (poll + features + LLM + tx) | 20 | 5 | 10.5 | 75 | 83 | 26.4 |
 | Verdict on-chain -> vault moved (oracle event -> Lasna -> callback) | 20 | 1 | 1 | 2 | 2 | 1.4 |
 | Trigger swap -> vault moved (end to end) | 20 | 6 | 12 | 77 | 84 | 27.7 |
-| Verdict on-chain -> Lasna ActionRequested (secondary, Lasna block time) | 9 | 0 | 0 | 0 | 0 | 0 |
-| Lasna ActionRequested -> vault moved (secondary, Lasna block time) | 20 | 1 | 2 | 2 | 2 | 1.9 |
 
 ## De-risk (crash)
 
@@ -27,8 +25,6 @@
 | Trigger swap -> AI verdict on-chain (poll + features + LLM + tx) | 10 | 5 | 7.5 | 75 | 75 | 15.3 |
 | Verdict on-chain -> vault moved (oracle event -> Lasna -> callback) | 10 | 1 | 1 | 2 | 2 | 1.3 |
 | Trigger swap -> vault moved (end to end) | 10 | 6 | 9 | 77 | 77 | 16.6 |
-| Verdict on-chain -> Lasna ActionRequested (secondary, Lasna block time) | 4 | 0 | 0 | 0 | 0 | 0 |
-| Lasna ActionRequested -> vault moved (secondary, Lasna block time) | 10 | 1 | 2 | 2 | 2 | 1.9 |
 
 ## Re-risk (recovery)
 
@@ -37,8 +33,6 @@
 | Trigger swap -> AI verdict on-chain (poll + features + LLM + tx) | 10 | 7 | 42 | 83 | 83 | 37.4 |
 | Verdict on-chain -> vault moved (oracle event -> Lasna -> callback) | 10 | 1 | 1 | 2 | 2 | 1.4 |
 | Trigger swap -> vault moved (end to end) | 10 | 8 | 43.5 | 84 | 84 | 38.8 |
-| Verdict on-chain -> Lasna ActionRequested (secondary, Lasna block time) | 5 | 0 | 0 | 0 | 0 | 0 |
-| Lasna ActionRequested -> vault moved (secondary, Lasna block time) | 10 | 1 | 2 | 2 | 2 | 1.9 |
 
 ## Only samples with an OpenAI call
 
@@ -47,8 +41,6 @@
 | Trigger swap -> AI verdict on-chain (poll + features + LLM + tx) | 19 | 5 | 9 | 83 | 83 | 24.7 |
 | Verdict on-chain -> vault moved (oracle event -> Lasna -> callback) | 19 | 1 | 1 | 2 | 2 | 1.3 |
 | Trigger swap -> vault moved (end to end) | 19 | 6 | 10 | 84 | 84 | 26 |
-| Verdict on-chain -> Lasna ActionRequested (secondary, Lasna block time) | 8 | 0 | 0 | 0 | 0 | 0 |
-| Lasna ActionRequested -> vault moved (secondary, Lasna block time) | 19 | 1 | 2 | 2 | 2 | 1.9 |
 
 1 sample(s) had no LLM call (calm, no-swap verdict), so they are left out of this table.
 
