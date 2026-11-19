@@ -1,0 +1,4 @@
+Replay of 188 verdicts from /home/arshid/guardian-vault/ai/verdicts.jsonl
+  188 consistent, 0 inconsistent  |  with a model score: 89, rule-score fallback: 8, guard band overrode the model: 16
+  OpenAI request/response re-checked on 72 entries; 17 older entries have no logged exchange (checks 1-3 still ran)
+  on-chain: 20 of 20 verdicts match their RiskUpdated event (rpc https://sepolia.base.org)

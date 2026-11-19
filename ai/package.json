@@ -9,7 +9,8 @@
     "check": "node src/check-llm.js",
     "start": "node src/index.js",
     "dry": "DRY_RUN=1 node src/index.js",
-    "test": "node --test"
+    "test": "node --test",
+    "replay": "node src/replay.js"
   },
   "dependencies": {
     "viem": "^2.21.0"
