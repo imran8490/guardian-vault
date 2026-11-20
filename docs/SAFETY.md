@@ -88,4 +88,4 @@ ok 10 - quiet window with no swaps never calls the model
 # fail 0
 ```
 
-Full suites: `forge test` -> 63 passed; `cd ai && npm test` -> 33 passed.
+Full suites: `forge test` -> 63 passed; `cd ai && npm test` -> 62 passed.

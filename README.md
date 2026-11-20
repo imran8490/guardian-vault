@@ -58,7 +58,7 @@ Every hop is a real transaction on the Base Sepolia / Reactive Lasna testnets (m
 - **Execution:** the full loop is live and every step has a transaction: trigger swap and AI publish on Base Sepolia, the Reactive transaction on Lasna (`ActionRequested`), and the vault callback on Base Sepolia (`DeRisked` / `ReRisked`). Hashes with explorer links for epochs 66, 68, 75 and 76 are in [`EVIDENCE.md`](EVIDENCE.md); `demo/proof.sh <epoch>` reproduces them.
 - **Integration:** `GuardianReactive` does the real work, not a relay. It owns the decision (hysteresis 70/30, 60 s cooldown, staleness, replay guard), reports skips with reason codes, and is the only party allowed to move the vault. Remove it and the vault never moves. The vault in turn verifies the AI verdict on-chain before trading.
 - **Usefulness:** vault depositors cannot watch markets 24/7, and keeper bots are a trusted single point of failure. Here an AI verdict becomes an on-chain action with no operator, users can always `withdraw()`, and an AI or OpenAI outage fails safe.
-- **Craft:** 63 Foundry tests and 33 AI-service tests, a threat table with a test behind every row ([`docs/SAFETY.md`](docs/SAFETY.md)), a one-command demo, and an audit log of every AI verdict including the full OpenAI request and response (`ai/verdicts.jsonl`, reason hash on-chain).
+- **Craft:** 63 Foundry tests and 62 AI-service tests, a threat table with a test behind every row ([`docs/SAFETY.md`](docs/SAFETY.md)), a one-command demo, and an audit log of every AI verdict including the full OpenAI request and response (`ai/verdicts.jsonl`, reason hash on-chain).
 
 ## Fit with the track brief (Reactive Meets AI)
 
@@ -162,7 +162,7 @@ published results above were produced without them. Every verdict they touch sta
 (`npm run replay`), because the extra inputs are logged next to the verdict.
 
 **`CALM_CAP=1`: let a recovered pool re-risk.** The guard band keeps the final score within rule score +/- 30. After a
-recovery with a tiny residual drawdown the rule score is 1-5, so the cap is 31-35, one point above the re-risk
+recovery with a tiny residual drawdown the rule score is 1-5, so the cap is 31-35, one to five points above the re-risk
 threshold of 30, and a stale LLM answer (it still sees the crash earlier in the 5-minute window) keeps the vault
 risk-off until a later verdict. With the calm cap, a rule score of 5 or less (price back within ~1.4% of the window
 peak) limits the final score to 30. Above that rule score nothing changes, so a de-risk can never be affected
@@ -245,7 +245,7 @@ Requirements: Foundry, Node 20+, a throwaway wallet with Base Sepolia ETH and lR
 git clone --recurse-submodules <this repo> && cd guardian-vault
 forge build
 forge test                     # 63 tests
-(cd ai && npm install && npm test)   # 33 tests
+(cd ai && npm install && npm test)   # 62 tests
 cp .env.example .env           # fill in as you deploy, then: source .env
 cast wallet import testdeployer --interactive   # keys live in a Foundry keystore, never in .env
 ```
