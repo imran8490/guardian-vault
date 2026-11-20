@@ -83,3 +83,23 @@ export function baselineScore(f) {
 export function applyGuard(llmScore, baseline, band) {
   return clamp(Math.round(llmScore), Math.max(0, baseline - band), Math.min(100, baseline + band));
 }
+
+/// NN "asym" mode. One condition drives both helpers below: the rule score is <= calmMax, i.e. the pool price is
+/// essentially back at its window peak (calmMax 5 = drawdown <= ~1.4%). In that state a de-risk is impossible anyway
+/// (it needs a final score >= 70, i.e. a rule score >= 40), so only a re-risk can be affected.
+///
+/// mixModelScore: when NOT calm, the NN can only raise the score (max of LLM and NN), so it can never talk the vault
+/// out of a de-risk or into an early re-risk during a pause in a crash. When calm, LLM and NN are blended.
+export function mixModelScore(llmScore, nnScore, { w = 0.5, mode = "blend", base = 0, calmMax = 5 } = {}) {
+  if (nnScore === null || nnScore === undefined) return llmScore;
+  if (mode === "asym" && base > calmMax) return Math.max(llmScore, nnScore);
+  return Math.round((1 - w) * llmScore + w * nnScore);
+}
+
+/// applyGuard, except that when the rule score is calm the final score cannot exceed the re-risk threshold `low`.
+/// Without this a stale LLM verdict (85 on a fully recovered pool) is clamped to rule+30 = 31 or 32 and the vault
+/// cannot re-risk, which needs <= 30 (seen live: epoch 198).
+export function applyGuardCalmCap(score, baseline, band, low, calmMax = 5) {
+  const upper = baseline <= calmMax ? Math.min(baseline + band, low) : Math.min(100, baseline + band);
+  return clamp(Math.round(score), Math.max(0, baseline - band), upper);
+}

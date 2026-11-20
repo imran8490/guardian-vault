@@ -155,6 +155,54 @@ npm run replay -- --onchain --last 20   # also compares the last 20 with their R
 
 Last run (see [`docs/REPLAY_RESULT.txt`](docs/REPLAY_RESULT.txt)): 188 verdicts, 188 consistent, 0 inconsistent; the OpenAI exchange was re-checked on 72 of them (17 early entries were logged before the exchange was recorded); 20 of 20 checked verdicts match their on-chain `RiskUpdated` event. This proves the published number follows from the logged inputs. It does not prove the model's judgement is right.
 
+## Optional extras (off by default): neural network and calm cap
+
+Two switches in the AI service (`ai/`). Both are **off unless you set them**, the contracts are unchanged, and the
+published results above were produced without them. Every verdict they touch stays replayable
+(`npm run replay`), because the extra inputs are logged next to the verdict.
+
+**`CALM_CAP=1`: let a recovered pool re-risk.** The guard band keeps the final score within rule score +/- 30. After a
+recovery with a tiny residual drawdown the rule score is 1-5, so the cap is 31-35, one point above the re-risk
+threshold of 30, and a stale LLM answer (it still sees the crash earlier in the 5-minute window) keeps the vault
+risk-off until a later verdict. With the calm cap, a rule score of 5 or less (price back within ~1.4% of the window
+peak) limits the final score to 30. Above that rule score nothing changes, so a de-risk can never be affected
+(a de-risk needs a final score of 70, i.e. a rule score of at least 40). Unit tests check this for every rule score
+0-100.
+
+**`NN_ENABLED=1`: a small neural network as a second signal.** A 9-12-6-1 MLP (199 weights, pure JS, no dependency,
+`ai/model/mlp.json`, sha256 inside) reads the same features as the LLM, so `same features + same weights = same score`
+and `npm run replay` recomputes it. It is trained on **simulated** constant-product pool episodes, not market data
+(`npm run train`; seeded, and it rebuilds the same weights file in my environment: compare the sha256), with a
+forward-looking label: how much further the price falls. On 150 held-out simulated episodes it has a mean error of
+15.6 points and agrees with the 70 / 30 thresholds 89% / 85% of the time, so it is a modest model and not a claim
+about real markets.
+- *Why it is not a plain average.* Because it predicts a **further** fall, it scores a crash that has stopped
+  as low. In a live test with a 50/50 blend (epochs 194, 195, 197) the NN said 7, 9 and 0 during and after the crash,
+  and only the guard band held the final score at 70. The default mode `NN_MODE=asym` therefore lets the NN only raise
+  the score, except when the rule score is calm (then LLM and NN are blended and the calm cap applies).
+  `NN_MODE=blend` keeps the plain mix, for comparison.
+- Without the LLM (API down) the NN score, kept inside the rule band, replaces the rule-only fallback.
+
+**What was measured** (same `demo/run-demo.sh` cycle and the same on-chain timing as the benchmark above):
+
+| Setting | Cycles / samples | Swap to vault, median (range) |
+|---|---|---|
+| Default, 20-sample benchmark above | 10 / 20 | de-risk 9 s, re-risk 43.5 s |
+| `NN_ENABLED=1` (asym), `bench-nn2/` | 5 / 9 (+1 excluded: Lasna RPC connection error while building the proof) | 11 s (6-14 s) |
+| `CALM_CAP=1`, `bench-cap/` | 5 / 10 | 10.5 s (6-14 s) |
+
+How to read this: **re-risk time depends on where the recovery lands, not on these switches alone.** When the rule
+score is 0 the old guard band already allows a final score of 30 and the re-risk takes about 10 s. When a residual
+drawdown gives a rule score of 1-5 the old clamp holds the vault risk-off until a later verdict. That is what the
+slow re-risks of the 20-sample run were: six recovery verdicts (epochs 161, 166, 171, 176, 181, 187) with rule score
+1-2, LLM 70-80 and final score 31-32. Replaying them with the calm cap gives 30 for all six. In the two newer
+benchmarks every recovery we inspected (epochs 205, 211, 219 and the five in `bench-cap/`) landed at rule score 0,
+so **the calm cap itself did not fire live**; its evidence is the unit tests and the replay of those six logged
+verdicts. The ~10 s numbers show the fast path, not a speed-up the cap caused. Samples are few and testnet-only.
+
+Settings: `NN_ENABLED`, `NN_MODE` (`asym` or `blend`), `NN_WEIGHT`, `NN_CALM_RULE`, `CALM_CAP`, `CALM_RULE`
+(see `ai/.env.example`).
+
 ## What the Reactive contract decides
 
 - **Hysteresis:** de-risk at score ≥ `HIGH` (70), re-risk only at score ≤ `LOW` (30). Scores in between do nothing, so a score wobbling near one line cannot flip-flop the vault.

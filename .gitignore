@@ -6,3 +6,9 @@ broadcast/
 !.env.example
 node_modules/
 *:Zone.Identifier
+
+# benchmark run logs (RESULTS.md / results.json / reserves.tsv are tracked) and local patch files
+bench*/run-*.log
+/nn-update.patch
+/nn-asym.patch
+/calm-cap.patch

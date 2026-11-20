@@ -55,15 +55,21 @@ PY
   # vault pays for callbacks in ETH. If the reserves run out, debt appears and the network stops serving the
   # contract (events are silently no longer processed). A plain REACT transfer to the contract does NOT help:
   # top up with depositTo (command printed below). So check reserves, debt and the vault's ETH first.
-  RES=$(cast call "$SYS" "reserves(address)(uint256)" "$G_REACTIVE_ADDRESS" --rpc-url "$LASNA_RPC" 2>/dev/null | awk '{print $1}')
-  DEBT=$(cast call "$SYS" "debt(address)(uint256)" "$G_REACTIVE_ADDRESS" --rpc-url "$LASNA_RPC" 2>/dev/null | awk '{print $1}')
+  # The public Lasna RPC drops a connection now and then, so retry the two reads a few times before giving up.
+  RES=""; DEBT=""
+  for try in 1 2 3 4 5; do
+    RES=$(cast call "$SYS" "reserves(address)(uint256)" "$G_REACTIVE_ADDRESS" --rpc-url "$LASNA_RPC" 2>/dev/null | awk '{print $1}')
+    DEBT=$(cast call "$SYS" "debt(address)(uint256)" "$G_REACTIVE_ADDRESS" --rpc-url "$LASNA_RPC" 2>/dev/null | awk '{print $1}')
+    [ -n "$RES" ] && [ -n "$DEBT" ] && break
+    echo "    Lasna RPC read failed (try $try/5), retrying in 10 s"; sleep 10
+  done
   VB=$(cast balance "$VAULT_ADDRESS" --rpc-url "$BASE_SEPOLIA_RPC" --ether 2>/dev/null || echo 0)
   printf '%s\t%s\t%s\n' "$n" "${RES:-}" "${DEBT:-}" >> "$OUT/reserves.tsv"
   python3 - "${RES:-}" "${DEBT:-}" "$VB" "${MIN_RESERVES:-0.05}" "${MIN_VAULT_ETH:-0.003}" <<'PY' || { echo "Stopping before run $n. Fix: cast send $SYS \"depositTo(address)\" $G_REACTIVE_ADDRESS --value 1ether --rpc-url \$LASNA_RPC --account \$ACCOUNT --password-file ~/.guardian-pw   (vault low on ETH: send it some Base Sepolia ETH). Override minimums with MIN_RESERVES / MIN_VAULT_ETH."; break; }
 import sys
 res, debt = sys.argv[1], sys.argv[2]
 if not res or not debt:
-    print("    could not read reserves/debt from the Lasna RPC (try again in a minute)")
+    print("    could not read reserves/debt from the Lasna RPC after 5 tries (RPC problem, not low reserves: check LASNA_RPC)")
     sys.exit(1)
 res, debt = int(res) / 1e18, int(debt) / 1e18
 vb, mr, mv = float(sys.argv[3]), float(sys.argv[4]), float(sys.argv[5])

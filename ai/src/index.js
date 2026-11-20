@@ -10,10 +10,15 @@ import { AI_DIR, loadEnvFile, getConfig } from "./config.js";
 import { computeFeatures, baselineScore } from "./features.js";
 import { shouldPublish } from "./policy.js";
 import { scoreVerdict, formatTrace } from "./scoring.js";
+import { loadModel, modelHash } from "./nn.js";
 
 loadEnvFile(path.join(AI_DIR, ".env"));
 loadEnvFile(path.join(AI_DIR, "..", ".env")); // reuse POOL/ORACLE/VAULT addresses from the main project .env
 const cfg = getConfig();
+if (cfg.nnEnabled) {
+  cfg.nnModel = cfg.nnModelPath ? loadModel(cfg.nnModelPath) : loadModel();
+  cfg.nnModelHash = modelHash(cfg.nnModel);
+}
 
 const poolAbi = parseAbi([
   "event Swap(address indexed sender, address indexed to, bool volToStable, uint256 amountIn, uint256 amountOut, uint256 priceE18)",
@@ -93,10 +98,10 @@ async function evaluate() {
   const f = computeFeatures(samples, now, cfg.windowSec);
   const base = baselineScore(f);
 
-  const { llm, final, reason, fallback, trace, guarded, error } = await scoreVerdict(f, base, cfg);
+  const { llm, nn, modelScore, final, reason, fallback, trace, guarded, calmCap, error } = await scoreVerdict(f, base, cfg);
   if (error) log("LLM error:", error);
   if (trace && cfg.showLlm) console.log(formatTrace(trace));
-  if (guarded) log(`  guard band: model said ${llm.score}, rule score ${base} -> clamped to ${final}`);
+  if (guarded) log(`  guard band: model said ${modelScore}${nn !== null ? ` (LLM ${llm.score}, NN ${nn})` : ""}, rule score ${base} -> clamped to ${final}`);
 
   const riskOff = await readRiskOff();
   const decision = shouldPublish({
@@ -107,18 +112,19 @@ async function evaluate() {
 
   log(
     `price=${f.currentPrice} dd=${f.currentDrawdownPct}% swaps=${f.swapCount} ` +
-      `rule=${base} llm=${llm ? llm.score : "-"} final=${final} vaultRiskOff=${riskOff} ` +
+      `rule=${base} llm=${llm ? llm.score : "-"}${nn !== null ? ` nn=${nn}` : ""} final=${final} vaultRiskOff=${riskOff} ` +
       `-> ${decision.publish ? "PUBLISH" : "hold"} (${decision.why})`,
   );
   if (!decision.publish) return;
 
-  const reasonText = `${reason} | rule=${base} llm=${llm ? llm.score : "n/a"} final=${final}`;
+  const reasonText = `${reason} | rule=${base} llm=${llm ? llm.score : "n/a"}${nn !== null ? ` nn=${nn}` : ""} final=${final}`;
   const reasonHash = keccak256(toHex(reasonText));
   const entry = {
     time: new Date().toISOString(), features: f, ruleScore: base,
     llm: llm ? { score: llm.score, model: llm.model, reason: llm.reason } : null,
     openai: trace, // full request/response exchange (no API key), so every verdict can be audited
-    guarded, fallback, finalScore: final, reasonText, reasonHash, why: decision.why, vaultRiskOff: riskOff,
+    nn: nn !== null ? { score: nn, weight: cfg.nnWeight, model: cfg.nnModelHash, mode: cfg.nnMode, low: cfg.low, calmMax: cfg.nnCalmRule } : null,
+    calmCap: calmCap ?? null, guarded, fallback, finalScore: final, reasonText, reasonHash, why: decision.why, vaultRiskOff: riskOff,
   };
 
   if (cfg.dryRun) {

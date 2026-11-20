@@ -67,6 +67,23 @@ export function getConfig(env = process.env) {
     high: num(env.HIGH_THRESHOLD, 70),
     low: num(env.LOW_THRESHOLD, 30),
     guardBand: num(env.GUARD_BAND, 30),
+
+    // Optional second signal: a small neural network (ai/model/mlp.json) scored from the same features.
+    // Off by default. When on, model score = (1 - nnWeight) * LLM + nnWeight * NN, then the same guard band applies.
+    nnEnabled: env.NN_ENABLED === "1",
+    nnWeight: num(env.NN_WEIGHT, 0.5),
+    // "asym" (default when the NN is on): the NN can only RAISE the score unless the rule score says the pool is back at
+    // its peak (<= NN_CALM_RULE), where the two are blended and the final score is capped at the re-risk threshold.
+    // "blend": always the weighted mix (live test: the NN under-scored finished crashes, only the guard band held 70).
+    nnMode: env.NN_MODE === "blend" ? "blend" : "asym",
+    nnCalmRule: num(env.NN_CALM_RULE, 5),
+
+    // Calm cap, independent of the NN (off by default): when the rule score is <= calmRule (pool back at its window peak),
+    // the final score cannot stay above the re-risk threshold. Fixes the rule+30 = 31/32 clamp that kept the vault risk-off
+    // after a recovery while the LLM was still answering from the crash earlier in the window. See applyGuardCalmCap.
+    calmCap: env.CALM_CAP === "1",
+    calmRule: num(env.CALM_RULE, 5),
+    nnModelPath: env.NN_MODEL || null,
     logPath: env.VERDICT_LOG || path.join(AI_DIR, "verdicts.jsonl"),
   };
 }

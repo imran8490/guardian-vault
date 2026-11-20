@@ -7,7 +7,9 @@
 /// What it proves, entry by entry:
 ///   1. the rule score is what the deterministic formula gives for the logged features
 ///   2. the final score is the model's score clamped to rule score +/- guard band (or the rule score when
-///      the model was not used: calm window or OpenAI failure)
+///      the model was not used: calm window or OpenAI failure). If the verdict also used the neural network
+///      (NN_ENABLED=1), its score is recomputed from the logged features with ai/model/mlp.json and the
+///      model score is (1 - weight) * LLM + weight * NN
 ///   3. the on-chain reason hash is keccak256 of the logged reason text, and that text names the same scores
 ///   4. the OpenAI request really contained those features and the response really contained that score
 ///   5. (--onchain) the oracle's RiskUpdated event has the same epoch, score and reason hash
@@ -16,7 +18,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createPublicClient, http, parseAbi, parseEventLogs, keccak256, toHex } from "viem";
-import { baselineScore, applyGuard } from "./features.js";
+import { baselineScore, applyGuard, applyGuardCalmCap, mixModelScore } from "./features.js";
+import { loadModel, predict, modelHash, DEFAULT_MODEL_PATH } from "./nn.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const oracleAbi = parseAbi([
@@ -27,7 +30,7 @@ const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 /// Pure, offline. Returns { problems, notes }: problems make an entry inconsistent, notes are only informational
 /// (older entries were logged before the OpenAI request/response trace existed, so check 4 cannot run on them).
-export function verifyEntry(e, { guardBand = 30 } = {}) {
+export function verifyEntry(e, { guardBand = 30, nnModel = null } = {}) {
   const problems = [];
   const notes = [];
   const f = e.features;
@@ -36,20 +39,38 @@ export function verifyEntry(e, { guardBand = 30 } = {}) {
   if (rule !== e.ruleScore) problems.push(`rule score ${e.ruleScore} != ${rule} recomputed from the logged features`);
 
   const modelUsed = e.llm && typeof e.llm.score === "number";
-  const expected = modelUsed ? applyGuard(e.llm.score, e.ruleScore, guardBand) : e.ruleScore;
+  const hasNn = e.nn && typeof e.nn.score === "number";
+  if (hasNn) {
+    if (!nnModel) notes.push("verdict used the neural network but no weights file was loaded, so its score was not recomputed");
+    else if (e.nn.model && modelHash(nnModel) !== e.nn.model) notes.push("the neural network weights file differs from the one used for this verdict, so its score was not recomputed");
+    else {
+      const again = predict(nnModel, f).score;
+      if (again !== e.nn.score) problems.push(`NN score ${e.nn.score} != ${again} recomputed from the logged features`);
+    }
+  }
+  const w = hasNn ? (e.nn.weight ?? 0.5) : 0;
+  const mode = hasNn && e.nn.mode === "asym" ? "asym" : "blend"; // entries logged before the mode existed are "blend"
+  const calmMax = e.nn?.calmMax ?? 5;
+  // the calm cap applied to this verdict: logged in `calmCap`, or (entries from before that field) implied by NN asym mode
+  const cap = e.calmCap ?? (mode === "asym" ? { low: e.nn.low ?? 30, calmMax } : null);
+  const guard = (s) => (cap ? applyGuardCalmCap(s, e.ruleScore, guardBand, cap.low, cap.calmMax) : applyGuard(s, e.ruleScore, guardBand));
+  const modelScore = !modelUsed ? null : hasNn ? mixModelScore(e.llm.score, e.nn.score, { w, mode, base: e.ruleScore, calmMax }) : e.llm.score;
+  const expected = modelUsed
+    ? guard(modelScore)
+    : hasNn && e.fallback ? guard(e.nn.score) : e.ruleScore;
   if (expected !== e.finalScore) {
     problems.push(
       modelUsed
-        ? `final ${e.finalScore} != model ${e.llm.score} clamped to rule ${e.ruleScore} +/- ${guardBand} (= ${expected})`
-        : `final ${e.finalScore} != rule score ${e.ruleScore} (no model verdict used)`,
+        ? `final ${e.finalScore} != model score ${modelScore}${hasNn ? ` (LLM ${e.llm.score}, NN ${e.nn.score}, NN weight ${w}, mode ${mode})` : ""} clamped to rule ${e.ruleScore} +/- ${guardBand} (= ${expected})`
+        : `final ${e.finalScore} != ${hasNn && e.fallback ? "NN score clamped to the rule band" : "rule score"} ${e.ruleScore} (no LLM verdict used)`,
     );
   }
-  if (modelUsed && typeof e.guarded === "boolean" && e.guarded !== (e.finalScore !== e.llm.score)) {
-    problems.push(`guarded flag is ${e.guarded} but model ${e.llm.score} vs final ${e.finalScore}`);
+  if (modelUsed && typeof e.guarded === "boolean" && e.guarded !== (e.finalScore !== modelScore)) {
+    problems.push(`guarded flag is ${e.guarded} but model score ${modelScore} vs final ${e.finalScore}`);
   }
 
   if (keccak256(toHex(e.reasonText)) !== e.reasonHash) problems.push("reasonHash is not keccak256(reasonText)");
-  const tail = ` | rule=${e.ruleScore} llm=${modelUsed ? e.llm.score : "n/a"} final=${e.finalScore}`;
+  const tail = ` | rule=${e.ruleScore} llm=${modelUsed ? e.llm.score : "n/a"}${hasNn ? ` nn=${e.nn.score}` : ""} final=${e.finalScore}`;
   if (!e.reasonText.endsWith(tail)) problems.push(`reason text does not end with "${tail.trim()}"`);
 
   if (e.openai) {
@@ -109,16 +130,20 @@ async function main() {
   const guardBand = process.env.GUARD_BAND ? Number(process.env.GUARD_BAND) : 30;
   const rpc = process.env.RPC_URL || process.env.BASE_SEPOLIA_RPC || "https://sepolia.base.org";
 
+  let nnModel = null;
+  try { nnModel = loadModel(process.env.NN_MODEL || DEFAULT_MODEL_PATH); } catch { /* no weights file: NN scores are noted, not recomputed */ }
+
   let entries = fs.readFileSync(args.file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
   if (args.since) entries = entries.filter((e) => e.time >= args.since);
   if (entries.length === 0) { console.log("no entries to check"); return; }
 
-  let bad = 0, withModel = 0, fallback = 0, guarded = 0, legacy = 0, traced = 0;
+  let bad = 0, withModel = 0, fallback = 0, guarded = 0, legacy = 0, traced = 0, withNn = 0;
   const failures = [];
   for (const e of entries) {
-    const { problems: p, notes } = verifyEntry(e, { guardBand });
+    const { problems: p, notes } = verifyEntry(e, { guardBand, nnModel });
     if (notes.length) legacy++;
     if (e.openai) traced++;
+    if (e.nn) withNn++;
     if (e.llm) withModel++;
     if (e.fallback) fallback++;
     if (e.guarded) guarded++;
@@ -133,6 +158,7 @@ async function main() {
 
   console.log(`Replay of ${entries.length} verdicts from ${args.file}`);
   console.log(`  ${entries.length - bad} consistent, ${bad} inconsistent  |  with a model score: ${withModel}, rule-score fallback: ${fallback}, guard band overrode the model: ${guarded}`);
+  if (withNn) console.log(`  ${withNn} verdicts also used the neural network (its score is recomputed from the logged features)`);
   console.log(`  OpenAI request/response re-checked on ${traced} entries; ${legacy} older entries have no logged exchange (checks 1-3 still ran)`);
   if (!args.quiet) {
     for (const { e, p } of failures.slice(0, 20)) console.log(`  X epoch ${e.epoch ?? "?"} (${e.time}): ${p.join("; ")}`);
