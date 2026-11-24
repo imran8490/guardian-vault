@@ -26,7 +26,7 @@ SYS=0x8888888888888888888888888888888888888888   # Reactive system contract (fro
 mkdir -p "$OUT"
 
 [ -f "$PW" ] || { echo "Missing $PW (see header of demo/staged-crash.sh)"; exit 1; }
-[ -f ai/verdicts.jsonl ] || { echo "ai/verdicts.jsonl not found: start the AI service first (cd ai && npm start)"; exit 1; }
+[ -f "${VERDICT_LOG:-ai/verdicts.jsonl}" ] || { echo "ai/verdicts.jsonl not found: start the AI service first (cd ai && npm start)"; exit 1; }
 
 riskoff() { cast call "$VAULT_ADDRESS" "riskOff()(bool)" --rpc-url "$BASE_SEPOLIA_RPC"; }
 price()   { cast call "$POOL_ADDRESS" "priceE18()(uint256)" --rpc-url "$BASE_SEPOLIA_RPC" | awk '{print $1}'; }

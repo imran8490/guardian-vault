@@ -12,3 +12,5 @@ bench*/run-*.log
 /nn-update.patch
 /nn-asym.patch
 /calm-cap.patch
+# watchdog run logs (watchdog/run-NNN.log) are evidence: commit them
+watchdog/*.tmp

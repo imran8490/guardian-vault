@@ -1,0 +1,25 @@
+## Proof for epoch 5 (score 70, model gpt-4o-mini-2024-07-18)
+Reason: A significant 17.33% drop with only one swap and no recovery indicates a fast, large sell-driven decline, warranting immediate protection. | rule=61 llm=70 final=70
+
+Trigger swap (Base block 62404285, t=1795402725): 0xdfa3860da7f268dca31597b7fd6ea1fd2dbe1e51aa24bca6ada88cd3d65b15d3
+AI publishRisk (Base block 62404369, t=1795402742): 0xd9324b27dc80b98add6ae77c9900ce0c03b47f4e765c41cf04d8f2430a918156
+Reactive ActionRequested (Lasna block 9023252, t=1795402742): 0x9cc5af3ee330df1f4282c1ce9cbf50b796b2d9a8e63e33668bd4cebf8dbc1625
+Vault DeRisked callback (Base block 62404376, t=1795402744): 0xa928b01e4d415934a4f094e8b6f9ad7e760dcc0b988562eed3e39c984cd6e4c6
+
+swap -> AI publish : 17 s (includes polling, features, OpenAI call, tx confirmation)
+publish -> vault   : 2 s (oracle event -> Lasna -> callback)
+swap -> vault moved: 19 s end to end
+(timestamps are Base block times, 1 s resolution)
+
+## Proof for epoch 7 (score 30, model gpt-4o-mini-2024-07-18)
+Reason: A significant sell-driven decline is ongoing with a max swap impact of 98.79% and 5 out of 6 swaps being sells, indicating danger for gVOL holders. | rule=0 llm=70 final=30
+
+Trigger swap (Base block 62405682, t=1795403005): 0x836a09ad6c4c872b95bb9f1a37b2ee81b546c08a4c93444cf9c0ff3d140cebc4
+AI publishRisk (Base block 62405725, t=1795403013): 0x789327c6df50f43f773c563a107d9a4703fb33d4655801f92f024ee6a6fae372
+Reactive ActionRequested (Lasna block 9023508, t=1795403013): 0x7f6e8a489ca159e88517306ba1b1670fe7fe12e78ab01a4a3c36d84893376186
+Vault ReRisked callback (Base block 62405734, t=1795403015): 0x8543ce90e07c7dbaf062c65463af8f6712c4c83ef4963113ef76fa9b4dae70b0
+
+swap -> AI publish : 8 s (includes polling, features, OpenAI call, tx confirmation)
+publish -> vault   : 2 s (oracle event -> Lasna -> callback)
+swap -> vault moved: 10 s end to end
+(timestamps are Base block times, 1 s resolution)

@@ -1,5 +1,7 @@
 # Guardian Vault
 
+[![CI](https://github.com/imran8490/guardian-vault/actions/workflows/ci.yml/badge.svg)](https://github.com/imran8490/guardian-vault/actions/workflows/ci.yml)
+
 **An off-chain AI scores market risk. A Reactive Network contract reacts to that verdict on-chain and moves a vault out of a crashing token, automatically.**
 
 Built solo for the [Reactive Omni Buildathon](https://dorahacks.io) (DoraHacks, Nov 5 – Dec 5 2026), track **Reactive Meets AI**. Everything runs live on **Base Sepolia** and **Reactive Lasna**. The tokens and the pool are mocks so the scenario is reproducible.
@@ -7,6 +9,7 @@ Built solo for the [Reactive Omni Buildathon](https://dorahacks.io) (DoraHacks, 
 > **Scope: testnet only, mock assets.** This is not a mainnet DeFi product and makes no claim of real liquidity, real funds or audited code. What is real is the Reactive Network loop, the OpenAI call and the on-chain transactions. See [`docs/SAFETY.md`](docs/SAFETY.md).
 
 - Demo video (under 3 min): https://youtu.be/F_FTwyEWA5Y
+- Live monitor (reads the chains in your browser, checks every verdict hash): https://imran8490.github.io/guardian-vault/
 - Evidence (full-loop tx hashes with explorer links for epochs 66, 68, 75, 76): [`EVIDENCE.md`](EVIDENCE.md); all proofs and timings: [`NOTES.md`](NOTES.md); every AI verdict: [`ai/verdicts.jsonl`](ai/verdicts.jsonl)
 
 ## What it does
@@ -58,11 +61,22 @@ Every hop is a real transaction on the Base Sepolia / Reactive Lasna testnets (m
 - **Execution:** the full loop is live and every step has a transaction: trigger swap and AI publish on Base Sepolia, the Reactive transaction on Lasna (`ActionRequested`), and the vault callback on Base Sepolia (`DeRisked` / `ReRisked`). Hashes with explorer links for epochs 66, 68, 75 and 76 are in [`EVIDENCE.md`](EVIDENCE.md); `demo/proof.sh <epoch>` reproduces them.
 - **Integration:** `GuardianReactive` does the real work, not a relay. It owns the decision (hysteresis 70/30, 60 s cooldown, staleness, replay guard), reports skips with reason codes, and is the only party allowed to move the vault. Remove it and the vault never moves. The vault in turn verifies the AI verdict on-chain before trading.
 - **Usefulness:** vault depositors cannot watch markets 24/7, and keeper bots are a trusted single point of failure. Here an AI verdict becomes an on-chain action with no operator, users can always `withdraw()`, and an AI or OpenAI outage fails safe.
-- **Craft:** 63 Foundry tests and 62 AI-service tests, a threat table with a test behind every row ([`docs/SAFETY.md`](docs/SAFETY.md)), a one-command demo, and an audit log of every AI verdict including the full OpenAI request and response (`ai/verdicts.jsonl`, reason hash on-chain).
+- **Craft:** 114 Foundry tests and 62 AI-service tests, a threat table with a test behind every row ([`docs/SAFETY.md`](docs/SAFETY.md)), a one-command demo, and an audit log of every AI verdict including the full OpenAI request and response (`ai/verdicts.jsonl`, reason hash on-chain).
 
 ## Fit with the track brief (Reactive Meets AI)
 
-On-chain events trigger the model: the AI service watches the pool's `Swap` events and scores them. The model then decides what the Reactive contract does next: its verdict is the `RiskUpdated` event that `GuardianReactive` acts on. Stop the AI service and no verdict arrives, so the vault never moves. The model is a hosted LLM (OpenAI gpt-4o-mini, not a network trained by us), constrained by a rule-based guard band.
+On-chain events trigger the model: the AI service watches the pool's `Swap` events and scores them. The model then decides what the Reactive contract does next: its verdict is the `RiskUpdated` event that `GuardianReactive` acts on. In the live v2 deployment, stopping the AI service means no verdict arrives, so the vault does not move; v3 (below, in this repo) adds a watchdog for exactly that case. The model is a hosted LLM (OpenAI gpt-4o-mini, not a network trained by us), constrained by a rule-based guard band. The neural network in the live loop is that hosted model (gpt-4o-mini): its verdict is what the Reactive contract acts on. An optional small local network (off by default) can run beside it.
+
+## v3: watchdog for when the AI does not answer
+
+v2 starts every action from an AI verdict, so a silent or wrong AI means no response to a crash. v3 (`src/GuardianReactiveV3.sol`, `src/GuardianVaultV3.sol`) keeps the AI path unchanged and adds a second path that does not need it:
+
+- the Reactive contract also subscribes to the pool's `Swap` event and tracks the price;
+- if the price stays at or below a stop level (default 40% below the entry price) for a grace period (default 30 s) and the AI path has not moved the vault, it trips and requests `breakerDeRisk`;
+- the AI always gets the first chance, and the vault does not trust the callback: it re-reads the pool and refuses (`BreakerRejected`) unless the price really is at or below its own stop level;
+- re-risk stays AI-driven and oracle-checked.
+
+Design, safety argument, limitations (it needs a later event or an optional Cron tick to wake after the grace period), deploy steps and the demo are in [`docs/WATCHDOG.md`](docs/WATCHDOG.md). `demo/watchdog.sh` runs the "AI is down, the pool crashes, the vault de-risks anyway" scenario and saves a log in `watchdog/`. 51 Foundry tests cover v3, including a fuzz test that the breaker never sells above the stop price.
 
 ## What's next
 
@@ -303,9 +317,13 @@ rm ~/.guardian-pw
 | `src/RiskOracle.sol` | AI-signed risk verdicts, emits `RiskUpdated` |
 | `src/GuardianReactive.sol` | Lasna decision contract (`AbstractReactive`) |
 | `src/GuardianVault.sol` | shares-based vault; `deRisk` / `reRisk` via callback (`AbstractCallback`) |
+| `src/GuardianReactiveV3.sol`, `src/GuardianVaultV3.sol` | v3: the same AI path plus the pool-price watchdog (`breakerDeRisk`) |
+| `test/GuardianV3.t.sol`, `script/GuardianV3.s.sol` | v3 tests (51) and deploy scripts |
+| `docs/index.html`, `docs/WATCHDOG.md` | live monitor (GitHub Pages) and the watchdog write-up |
+| `.github/workflows/ci.yml` | Foundry tests, AI tests and the offline verdict replay on every push |
 | `src/Hello*.sol` | first smoke test of the Reactive loop (origin → reactive → callback) |
 | `script/` | deploy, link, seed, crash/recover and publish scripts |
-| `test/` | 10 hello-loop tests + 53 Guardian tests (mock system contract at `0x8888…8888`) |
+| `test/` | 10 hello-loop tests + 53 Guardian tests + 51 v3 tests (mock system contract at `0x8888…8888`) |
 | `ai/` | the AI risk service, its tests and `verdicts.jsonl` |
 | `demo/` | one-command demo, status, reset and evidence scripts |
 
@@ -313,7 +331,7 @@ Built on `reactive-lib-omni` (Omni fork: no RVM, single deployment, Solidity 0.8
 
 ## Notes for Reactive developers
 
-- The callback is billed in ETH to the **destination** contract; the Reactive contract needs lREACT. Top both up with a plain transfer.
+- The callback is billed in ETH to the **destination** contract; the Reactive contract needs lREACT. Fund the destination contract with a plain transfer; fund the Reactive contract with `depositTo(address)` on the system contract `0x8888...8888` (a plain transfer does not top up its reserves, and debt above 0 silently stops event processing).
 - The first callback argument is overwritten with the Reactive contract's address, so `deRisk` / `reRisk` take it as a placeholder and the vault checks it.
 - Base Sepolia public RPC caps `eth_getLogs` at ~200 blocks; Lasna's RPC cannot binary-search from block 1, so `proof.sh` estimates Lasna blocks from timestamps.
 - Callback reverts with `NotAuthorized`: wrong proxy address or mismatched reactive address. `callbackSender` is immutable; redeploy the destination if it is wrong.

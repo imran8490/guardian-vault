@@ -49,9 +49,9 @@ demo/status.sh
 
 say "5/5  On-chain evidence for this run"
 python3 - "$START" <<'PY' > /tmp/.guardian-epochs
-import json, sys, datetime
+import json, sys, datetime, os
 start = int(sys.argv[1]); de = re = None
-for line in open("ai/verdicts.jsonl"):
+for line in open(os.environ.get("VERDICT_LOG", "ai/verdicts.jsonl")):
     d = json.loads(line)
     t = datetime.datetime.fromisoformat(d["time"].replace("Z", "+00:00")).timestamp()
     if t < start: continue
