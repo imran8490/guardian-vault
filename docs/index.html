@@ -271,7 +271,7 @@ footer { margin: 84px 0 44px; padding-top: 22px; border-top: 1px solid var(--lin
   </section>
 
   <section class="block" id="verdicts">
-    <div class="sh"><h2>Verdicts you can check</h2><p>Rows come from <a href="https://github.com/imran8490/guardian-vault/blob/main/ai/verdicts.jsonl">ai/verdicts.jsonl</a>. Your browser hashes each reason text (keccak-256) and compares it with the hash the oracle emitted. The newest rows are also matched against their on-chain transaction. Click a reason to read all of it.</p></div>
+    <div class="sh"><h2>Verdicts you can check</h2><p>Rows come from <a href="https://github.com/imran8490/guardian-vault/blob/main/ai/verdicts-v3.jsonl">ai/verdicts-v3.jsonl</a>. Your browser hashes each reason text (keccak-256) and compares it with the hash the oracle emitted. The newest rows are also matched against their on-chain transaction. Click a reason to read all of it.</p></div>
     <div class="tablewrap"><table>
       <thead><tr><th>Time</th><th>Epoch</th><th>Score</th><th>Vault move</th><th>Reason as logged</th><th>Check</th><th>Transaction</th></tr></thead>
       <tbody id="rows"><tr><td colspan="7" class="small">Loading the verdict log…</td></tr></tbody>
@@ -310,10 +310,11 @@ footer { margin: 84px 0 44px; padding-top: 22px; border-top: 1px solid var(--lin
   <section class="block" id="measured">
     <div class="sh"><h2>Measured so far</h2><p>From the repository, not live. Testnet numbers on public RPCs, not a performance claim.</p></div>
     <div class="spec">
-      <div><div class="v">1 to 2<small>s</small></div><p>Reactive Network's part: verdict on-chain to vault moved, in all 20 benchmark samples.</p><a href="https://github.com/imran8490/guardian-vault/blob/main/bench/RESULTS.md">bench/RESULTS.md</a></div>
-      <div><div class="v">9<small>s de-risk</small> &nbsp;43.5<small>s re-risk</small></div><p>End to end with the default setup, medians of 20 samples. The time is the AI step, and the slow re-risks match a 31/32 clamp in the scoring.</p><a href="https://github.com/imran8490/guardian-vault#latency-benchmark-20-samples-v2-deployment">README, latency benchmark</a></div>
-      <div><div class="v">0<small>inconsistent</small></div><p>Last replay of the audit log (253 verdicts): every published score follows from its logged inputs. Run it yourself.</p><pre class="cmd">cd ai &amp;&amp; npm run replay</pre></div>
-      <div><div class="v">~10<small>s with extras</small></div><p>Optional neural network or calm cap, off by default. Two 5-cycle runs. Every recovery landed at rule score 0, so the cap itself was not exercised live.</p><a href="https://github.com/imran8490/guardian-vault#optional-extras-off-by-default-neural-network-and-calm-cap">README, optional extras</a></div>
+      <div><div class="v">0 to 2<small>s</small></div><p>Reactive Network's part: verdict on-chain to vault moved, in all 10 samples of the v3 market (1 to 2 s in the 20 earlier v2 samples).</p><a href="https://github.com/imran8490/guardian-vault/blob/main/bench-v3/RESULTS.md">bench-v3/RESULTS.md</a></div>
+      <div><div class="v">11<small>s de-risk</small> &nbsp;60<small>s re-risk</small></div><p>End to end on the v3 market, medians of 5 cycles each. The time is the AI step. The slow re-risks match the scoring clamp: the model still sees the crash in its 5-minute window (70), the guard band clamps it to 30, which is exactly the re-risk threshold. Not yet isolated in a controlled test.</p><a href="https://github.com/imran8490/guardian-vault#latency-benchmark-20-samples-v2-deployment">README, latency benchmark</a></div>
+      <div><div class="v">0<small>inconsistent</small></div><p>Last replay of the audit logs: all 42 v3 verdicts and all 262 v2 verdicts follow from their logged inputs. Run it yourself.</p><pre class="cmd">cd ai &amp;&amp; npm run replay</pre></div>
+      <div><div class="v">135<small>s with the AI off</small></div><p>One run with the AI service stopped: crash, breach seen on Lasna after 27 s, 30 s grace, a wake-up swap, vault de-risked 12 s later. Slower than the AI path by design. Transactions are listed in the evidence file.</p><a href="https://github.com/imran8490/guardian-vault/blob/main/watchdog/run-001-evidence.txt">watchdog/run-001-evidence.txt</a></div>
+      <div><div class="v">~10<small>s with extras</small></div><p>Optional neural network or calm cap, off by default (v2 market). Two 5-cycle runs. Every recovery landed at rule score 0, so the cap itself was not exercised live.</p><a href="https://github.com/imran8490/guardian-vault#optional-extras-off-by-default-neural-network-and-calm-cap">README, optional extras</a></div>
     </div>
   </section>
 
@@ -331,17 +332,18 @@ footer { margin: 84px 0 44px; padding-top: 22px; border-top: 1px solid var(--lin
 const CFG = {
   baseRpcs: ["https://sepolia.base.org", "https://base-sepolia-rpc.publicnode.com"],
   lasnaRpcs: ["https://lasna-rpc.rnk.dev/"],
-  oracle: "0x10E4eF88f1A4f82823198868d99756e0F118FB37",
-  vault: "0x5E114CE312DACd8e2892967B05891E689CdB89d2",
-  pool: "0x9992fB4FF288FA112d1bA4e4d70c67406b58390E",
-  reactive: "0x9992fB4FF288FA112d1bA4e4d70c67406b58390E",
+  oracle: "0x529f85ad4Bbb9e0DC67548245162EaFd8FFCc17b",
+  vault: "0x322cc6cec69811b45307544533432041ed14c151",
+  pool: "0xf1896221142cca5C3Ea069DE3Fe1864E392F4dFA",
+  reactive: "0x10E4eF88f1A4f82823198868d99756e0F118FB37",
   system: "0x8888888888888888888888888888888888888888",
-  logUrl: "https://raw.githubusercontent.com/imran8490/guardian-vault/main/ai/verdicts.jsonl",
+  logUrl: "https://raw.githubusercontent.com/imran8490/guardian-vault/main/ai/verdicts-v3.jsonl",
   // Benchmark sets (each folder holds results.json written by demo/bench_stats.py). Add a folder here after a new run.
   cycleSets: [
-    { label: "Default setup, 20 samples", url: "https://raw.githubusercontent.com/imran8490/guardian-vault/main/bench/results.json" },
-    { label: "With the neural network, 9 samples", url: "https://raw.githubusercontent.com/imran8490/guardian-vault/main/bench-nn2/results.json" },
-    { label: "With the calm cap, 10 samples", url: "https://raw.githubusercontent.com/imran8490/guardian-vault/main/bench-cap/results.json" },
+    { label: "v3 market, 10 samples", url: "https://raw.githubusercontent.com/imran8490/guardian-vault/main/bench-v3/results.json" },
+    { label: "v2 market, default setup, 20 samples", url: "https://raw.githubusercontent.com/imran8490/guardian-vault/main/bench/results.json" },
+    { label: "v2 market, with the neural network, 9 samples", url: "https://raw.githubusercontent.com/imran8490/guardian-vault/main/bench-nn2/results.json" },
+    { label: "v2 market, with the calm cap, 10 samples", url: "https://raw.githubusercontent.com/imran8490/guardian-vault/main/bench-cap/results.json" },
   ],
   rows: 30, checked: 12, refreshMs: 30000,
 };

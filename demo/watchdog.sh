@@ -120,26 +120,29 @@ echo "  total, crash -> de-risked     : $((DONE - T_CRASH))s"
 echo "  pool price now                : $(python3 -c "print(int('$(price)')/1e18)")"
 
 echo
-echo "Evidence (best effort, the Lasna RPC can be flaky):"
-cast logs --from-block "$START_BLK" --address "$VAULT_ADDRESS" \
-  "BreakerDeRisked(uint256,uint256,uint256,uint256,uint256)" "${B[@]}" --json 2>/dev/null \
-  | python3 -c '
+echo "Evidence (best effort; public RPCs limit eth_getLogs to ~200 blocks, so the search runs in chunks):"
+chunks() {  # rpc addr event-signature number-of-190-block-chunks
+  local top i; top=$(cast block-number --rpc-url "$1" 2>/dev/null) || return 0
+  for i in $(seq 0 $(($4 - 1))); do
+    cast logs --from-block $((top - 190 * (i + 1) + 1)) --to-block $((top - 190 * i)) \
+      --address "$2" "$3" --rpc-url "$1" --json 2>/dev/null
+  done
+}
+show() { python3 -c '
 import sys, json
-try:
-    for l in json.load(sys.stdin):
-        print("  vault BreakerDeRisked tx: https://sepolia.basescan.org/tx/" + l["transactionHash"])
-except Exception:
-    print("  (could not read vault logs)")'
-for try in 1 2 3; do
-  OUTJ=$(cast logs --from-block 1 --address "$G_REACTIVE_ADDRESS" \
-    "BreakerTripped(uint256,uint256,uint256,uint256)" "${L[@]}" --json 2>/dev/null) && break
-  sleep 5
-done
-echo "${OUTJ:-[]}" | python3 -c '
-import sys, json
-try:
-    for l in json.load(sys.stdin)[-1:]:
-        print("  Lasna BreakerTripped tx:  https://lasna.reactscan.net/tx/" + l["transactionHash"])
-except Exception:
-    print("  (could not read Lasna logs; look the contract up on https://lasna.reactscan.net)")'
+s = sys.stdin.read(); d = json.JSONDecoder(); i = 0; n = 0
+while True:
+    while i < len(s) and s[i].isspace(): i += 1
+    if i >= len(s): break
+    arr, i = d.raw_decode(s, i)
+    for l in arr:
+        n += 1; print("  " + sys.argv[1] + l["transactionHash"])
+if n == 0: print("  (none found in this window, look the contract up on the explorer)")
+' "$1"; }
+echo "Vault BreakerDeRisked (Base Sepolia):"
+chunks "$BASE_SEPOLIA_RPC" "$VAULT_ADDRESS" "BreakerDeRisked(uint256,uint256,uint256,uint256,uint256)" 6 | show "https://sepolia.basescan.org/tx/"
+echo "Reactive BreakerTripped (Lasna):"
+chunks "$LASNA_RPC" "$G_REACTIVE_ADDRESS" "BreakerTripped(uint256,uint256,uint256,uint256)" 12 | show "https://lasna.reactscan.net/tx/"
+echo "Reactive BreachSeen (Lasna):"
+chunks "$LASNA_RPC" "$G_REACTIVE_ADDRESS" "BreachSeen(uint256,uint256)" 12 | show "https://lasna.reactscan.net/tx/"
 echo "Log saved to $LOGF"

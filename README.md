@@ -76,13 +76,29 @@ v2 starts every action from an AI verdict, so a silent or wrong AI means no resp
 - the AI always gets the first chance, and the vault does not trust the callback: it re-reads the pool and refuses (`BreakerRejected`) unless the price really is at or below its own stop level;
 - re-risk stays AI-driven and oracle-checked.
 
-Design, safety argument, limitations (it needs a later event or an optional Cron tick to wake after the grace period), deploy steps and the demo are in [`docs/WATCHDOG.md`](docs/WATCHDOG.md). `demo/watchdog.sh` runs the "AI is down, the pool crashes, the vault de-risks anyway" scenario and saves a log in `watchdog/`. 51 Foundry tests cover v3, including a fuzz test that the breaker never sells above the stop price.
+Design, safety argument, limitations (it needs a later event or an optional Cron tick to wake after the grace period), deploy steps and the demo are in [`docs/WATCHDOG.md`](docs/WATCHDOG.md). `demo/watchdog.sh` runs the "AI is down, the pool crashes, the vault de-risks anyway" scenario and saves a log in `watchdog/`. A recorded run with the AI stopped is described under "Results on the v3 deployment". 51 Foundry tests cover v3, including a fuzz test that the breaker never sells above the stop price.
 
 ## What's next
 
 A real pool adapter, multiple signals (oracle price, liquidity depth), and an ensemble or committee of AI signers.
 
 ## Live deployment
+
+Current deployment: **v3** (the AI path plus the watchdog, see "v3: watchdog" below). The earlier v2 deployment stays live as a fallback and is listed underneath.
+
+| Contract | Chain | Address |
+|---|---|---|
+| RiskOracle | Base Sepolia (84532) | `0x529f85ad4Bbb9e0DC67548245162EaFd8FFCc17b` |
+| MockPool | Base Sepolia (84532) | `0xf1896221142cca5C3Ea069DE3Fe1864E392F4dFA` |
+| GuardianVaultV3 | Base Sepolia (84532) | `0x322cc6cec69811b45307544533432041ed14c151` |
+| GuardianReactiveV3 | Reactive Lasna (5318007) | `0x10E4eF88f1A4f82823198868d99756e0F118FB37` |
+| MockVOL / MockStable | Base Sepolia (84532) | `0x604E0E1A4654513f3b8bd9f5E21D4b6286E84af9` / `0x6FD6E8e5A96199cB9e8C21C6739FcfbD8873137b` |
+
+The same address on two chains (the v3 Reactive contract and the v2 oracle) comes from the same deployer and nonce, not from a shared contract.
+
+Verdict logs: `ai/verdicts-v3.jsonl` belongs to the v3 oracle, `ai/verdicts.jsonl` to the v2 oracle. Both start epoch numbering at 1, so an epoch number alone does not identify a row. The environment variable `VERDICT_LOG` selects the file for the AI service, `demo/proof.sh`, `demo/run-demo.sh` and `demo/bench.sh`.
+
+### Earlier v2 deployment (kept live as a fallback)
 
 | Contract | Chain | Address |
 |---|---|---|
@@ -100,6 +116,16 @@ Base contracts on [sepolia.basescan.org](https://sepolia.basescan.org); the Lasn
 ## Who this is for
 
 Anyone who parks funds in a volatile asset and cannot watch the market all day: a DAO treasury, a vault depositor, a small fund. Today the protection is a keeper bot or a human with a multisig, both of which are slow, trusted and offline when it matters. Here the trigger is a public on-chain verdict, the action is on-chain and rule-bound, and users can always withdraw.
+
+## Results on the v3 deployment
+
+All on testnet (Base Sepolia + Reactive Lasna), mock tokens and a mock pool. The evidence files are in the repository; none of this is a mainnet claim.
+
+- **Latency, AI path.** 5 complete demo cycles (10 samples), in [`bench-v3/`](bench-v3/RESULTS.md). De-risk, trigger swap to vault moved: median 11 s (max 13 s). Re-risk: median 60 s (max 66 s). Verdict on-chain to vault moved, which is the part Reactive Network owns: 0 to 2 s in every sample. With n = 10 the p95 is the maximum. The slow re-risks follow the same pattern as in v2 (for example epoch 7: rule score 0, model 70, guard band clamps to 30, which is the re-risk threshold), but that explanation has not been isolated in a controlled test.
+- **One full cycle with every transaction.** [`evidence-v3/cycle-proof-epoch5-7.txt`](evidence-v3/cycle-proof-epoch5-7.txt): crash swap, AI `publishRisk`, Lasna `ActionRequested`, vault `DeRisked` (19 s end to end), then recovery swap to `ReRisked` (10 s).
+- **Watchdog with the AI stopped.** [`watchdog/run-001.log`](watchdog/run-001.log) and [`watchdog/run-001-evidence.txt`](watchdog/run-001-evidence.txt) (transaction links for `BreachSeen`, `BreakerTripped`, `BreakerDeRisked`). Crash, breach seen on Lasna after 27 s, 30 s grace, one wake-up swap, vault de-risked 12 s after it, 135 s in total. This is slower than the AI path on purpose (the AI gets the first chance), and it needed the wake-up swap, see the limitations in [`docs/WATCHDOG.md`](docs/WATCHDOG.md).
+- **Audit log.** `cd ai && node src/replay.js verdicts-v3.jsonl`: 42 verdicts, 0 inconsistent; the guard band overrode the model in 7 of them.
+- **What it costs.** Reactive reserves drop about 0.16 REACT per cycle (de-risk plus re-risk and the idle verdicts in between). The vault does not make money in these runs: the pool is a mock, the crash is staged and then reversed, and each cycle loses value to slippage (after the benchmark the vault was worth about 13.5 gUSD against 100.35 if it had just held). The runs show the mechanism and its timing, not a return. A stop-loss locks in the loss when a crash reverses, and only pays when the price keeps falling.
 
 ## Results from the recorded run (v2 deployment)
 
