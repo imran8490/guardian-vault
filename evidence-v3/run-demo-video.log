@@ -1,0 +1,70 @@
+
+[1;36m== 1/5  Vault today: holds 100.00 gVOL (the volatile token), pool price near 1.0[0m
+pool price        : 1.0035 gUSD per gVOL
+vault riskOff     : false
+vault holdings    : 100.0000 gVOL + 0.0000 gUSD
+vault value       : 100.35 gUSD (at current price)
+if just held 100 gVOL: 100.35 gUSD
+difference        : +0.00 gUSD
+
+[1;36m== 2/5  Market crash: 4 sells of 1000 gVOL, 12s apart. Watch the AI terminal.[0m
+Staged crash: 4 x 1000.0 gVOL, every 12s
+--- dump 1/4  (15:25:03)
+  price after (1e18 = 1.0): 830317459943884063
+--- dump 2/4  (15:25:40)
+  price after (1e18 = 1.0): 686942144406465111
+--- dump 3/4  (15:26:19)
+  price after (1e18 = 1.0): 586555198686782754
+--- dump 4/4  (15:26:56)
+  price after (1e18 = 1.0): 506675378635391258
+Done. Watch the AI terminal, then run demo/status.sh
+
+[1;36m== 3/5  Did the AI + Reactive Network protect the vault?[0m
+   vault riskOff=true after 6s          
+pool price        : 0.5067 gUSD per gVOL
+vault riskOff     : true
+vault holdings    : 0.0000 gVOL + 82.0423 gUSD
+vault value       : 82.04 gUSD (at current price)
+if just held 100 gVOL: 50.67 gUSD
+difference        : +31.37 gUSD
+
+[1;36m== 4/5  Recovery: price goes back to ~1.0 (waiting out the 60 s cooldown first)[0m
+   cooldown 46s    cooldown 44s    cooldown 42s    cooldown 40s    cooldown 38s    cooldown 36s    cooldown 34s    cooldown 32s    cooldown 30s    cooldown 28s    cooldown 26s    cooldown 24s    cooldown 22s    cooldown 20s    cooldown 18s    cooldown 16s    cooldown 14s    cooldown 12s    cooldown 10s    cooldown 8s    cooldown 6s    cooldown 4s    cooldown 2s 
+pool: price 0.5067  ->  action: buy 2910975538383187607552 wei
+  price after (1e18 = 1.0): 1000867167493263280
+   waiting for the vault... 6s    waiting for the vault... 15s    waiting for the vault... 23s    waiting for the vault... 32s    waiting for the vault... 40s    waiting for the vault... 49s    waiting for the vault... 57s    waiting for the vault... 65s    waiting for the vault... 74s    waiting for the vault... 82s    vault riskOff=false after 91s          
+pool price        : 1.0172 gUSD per gVOL
+vault riskOff     : false
+vault holdings    : 81.0674 gVOL + 0.0000 gUSD
+vault value       : 82.46 gUSD (at current price)
+if just held 100 gVOL: 101.72 gUSD
+difference        : -19.26 gUSD
+
+[1;36m== 5/5  On-chain evidence for this run[0m
+## Proof for epoch 55 (score 70, model gpt-4o-mini-2024-07-18)
+Reason: A significant 17.26% drop with only one swap and no recovery indicates a fast, large sell-driven decline, warranting immediate protection. | rule=60 llm=70 final=70
+
+Trigger swap (Base block 63492284, t=1795620325): 0xdf323ce896412636eb2fe390d46f8d277933be7a06e3fad3c68ec9a00148f5cd
+AI publishRisk (Base block 63492333, t=1795620335): 0x9c525631693d8a081546ac8ff409fc71de98a004231af38ebbd4984e7d1a931e
+Reactive ActionRequested (Lasna block 9226903, t=1795620335): 0x1e407a09600f580d9768da42a2c60395447598000dad9ee02791be9c89de41ca
+Vault DeRisked callback (Base block 63492340, t=1795620336): 0x6604baed1f74efbf03d50dbf5cae9c114792037828a2aa05a7c1ab3dcab30de3
+
+swap -> AI publish : 10 s (includes polling, features, OpenAI call, tx confirmation)
+publish -> vault   : 1 s (oracle event -> Lasna -> callback)
+swap -> vault moved: 11 s end to end
+(timestamps are Base block times, 1 s resolution)
+
+## Proof for epoch 58 (score 30, model gpt-4o-mini-2024-07-18)
+Reason: A significant 22.73% price increase with a max drop impact of 15.77% and high sell volume indicates a dangerous sell-driven decline. | rule=0 llm=85 final=30
+
+Trigger swap (Base block 63493415, t=1795620551): 0x0ef620037dd4792f85d8cf96bad3476ee4c425434b9a0e529412b6a88df31ed9
+AI publishRisk (Base block 63493861, t=1795620641): 0xa564b60ec7e1d8e0f8c74b8fd0226a7c3747868aad62765ade332e52c3fd5693
+Reactive ActionRequested (Lasna block 9227184, t=1795620640): 0x019e51c685c4872b9a43f1eff1024726a3955f4a522dc9800856b13145f80915
+Vault ReRisked callback (Base block 63493869, t=1795620642): 0x37da442e44f58905a3dc2ccd20bbce0b477e2212072d249fad8d2345e986d04e
+
+swap -> AI publish : 90 s (includes polling, features, OpenAI call, tx confirmation)
+publish -> vault   : 1 s (oracle event -> Lasna -> callback)
+swap -> vault moved: 91 s end to end
+(timestamps are Base block times, 1 s resolution)
+
+[1;36m== Done. Full AI reasoning for every verdict: ai/verdicts.jsonl[0m

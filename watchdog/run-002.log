@@ -1,0 +1,29 @@
+Watchdog demo run 2  (Wed Nov 25 15:55:41 UTC 2026)
+Reactive: stop level 4000 bps below entry (price <= 0.6005203004959581), grace 30s. Vault stop level: 4000 bps.
+    reactive reserves 0.4627 REACT, debt 0.0000
+REMINDER: the AI service must be stopped for this run.
+
+[15:56:57] crash: one sell of 5000.0 gVOL
+  price after (1e18 = 1.0): 452227798790740433
+[15:57:23] waiting for Reactive to see the Swap event (breachSince > 0) ...
+[15:57:30] breach seen on Lasna after 7s (grace timer started at unix 1795622240)
+[15:57:30] the AI service is silent; waiting 33s for the grace period to pass ...
+[15:58:03] wake-up: a 1 gVOL swap (any later Swap or oracle event does the same job as a Cron tick)
+  price after (1e18 = 1.0): 452167556310296487
+[15:58:29] polling the vault ...
+
+RESULT: vault is risk-off with no AI verdict at all.
+  crash -> breach seen on Lasna : 7s
+  grace period                  : 30s (configured)
+  wake-up -> vault de-risked    : 6s
+  total, crash -> de-risked     : 72s
+  pool price now                : 0.4473236131826855
+
+Evidence (best effort; public RPCs limit eth_getLogs to ~200 blocks, so the search runs in chunks):
+Vault BreakerDeRisked (Base Sepolia):
+  https://sepolia.basescan.org/tx/0x6ebc4f60749c426bd4398c55b53c97c5623bc930eb6dd0b761cc67542595ec12
+Reactive BreakerTripped (Lasna):
+  https://lasna.reactscan.net/tx/0x5c7bbb9ac9c8a73bf0a8b28e46f3f3dc97cfb16d0cdd001b75e0ca6ce4101a5b
+Reactive BreachSeen (Lasna):
+  https://lasna.reactscan.net/tx/0xa707ffae09a545934976c2ce1b480c78f1bae507776ea59936720b22e9e713f6
+Log saved to watchdog/run-002.log
