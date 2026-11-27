@@ -8,7 +8,7 @@ Built solo for the [Reactive Omni Buildathon](https://dorahacks.io) (DoraHacks, 
 
 > **Scope: testnet only, mock assets.** This is not a mainnet DeFi product and makes no claim of real liquidity, real funds or audited code. What is real is the Reactive Network loop, the OpenAI call and the on-chain transactions. See [`docs/SAFETY.md`](docs/SAFETY.md).
 
-- Demo video (under 3 min): https://youtu.be/F_FTwyEWA5Y
+- Demo video (4:41, AI path and AI-off watchdog run): https://youtu.be/uD6LaPJmDmk
 - Live monitor (reads the chains in your browser, checks every verdict hash): https://imran8490.github.io/guardian-vault/
 - Evidence (full-loop tx hashes with explorer links for epochs 66, 68, 75, 76): [`EVIDENCE.md`](EVIDENCE.md); all proofs and timings: [`NOTES.md`](NOTES.md); every AI verdict: [`ai/verdicts.jsonl`](ai/verdicts.jsonl)
 
